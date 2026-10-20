@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { 
   Users, UserPlus, Trash2, Smartphone, Download, 
-  Upload, RotateCcw, Globe, Check, Shield, Info, Edit2 
+  Upload, RotateCcw, Globe, Check, Shield, Info, Edit2, Link as LinkIcon 
 } from 'lucide-react';
 
 export default function SettingsTab({
   members = [],
   pairs = [],
+  payboxLink = 'https://payboxapp.page.link/shuk-kitchen',
+  onUpdatePayboxLink,
   onAddMember,
   onRemoveMember,
-  onUpdatePairs,
   onResetData,
   onExportData,
   onImportData,
@@ -17,6 +18,8 @@ export default function SettingsTab({
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberPhone, setNewMemberPhone] = useState('');
   const [newMemberAvatar, setNewMemberAvatar] = useState('👨‍🍳');
+  const [payboxInput, setPayboxInput] = useState(payboxLink);
+  const [payboxSaved, setPayboxSaved] = useState(false);
 
   const avatarOptions = ['👨‍🍳', '🍳', '🧑‍🍳', '🥗', '🍲', '🍽️', '🔪', '🍗', '🥩', '🥙'];
 
@@ -30,10 +33,18 @@ export default function SettingsTab({
       phone: newMemberPhone.trim() || '',
       avatar: newMemberAvatar,
       color: 'from-orange-500 to-amber-600',
+      paidThisMonth: false,
     });
 
     setNewMemberName('');
     setNewMemberPhone('');
+  };
+
+  const handleSavePaybox = (e) => {
+    e.preventDefault();
+    onUpdatePayboxLink(payboxInput.trim());
+    setPayboxSaved(true);
+    setTimeout(() => setPayboxSaved(false), 2000);
   };
 
   const handleFileUpload = (e) => {
@@ -56,6 +67,41 @@ export default function SettingsTab({
   return (
     <div className="space-y-4 pb-20 pt-2 px-3 sm:px-4 max-w-md mx-auto">
       
+      {/* 💳 PAYBOX LINK SETTINGS */}
+      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/80 space-y-3">
+        <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
+          <LinkIcon className="w-4 h-4 text-blue-600" />
+          <span>קישור לקבוצת ה-PayBox שלכם</span>
+        </h3>
+        <p className="text-xs text-slate-500">
+          הדביקו כאן את קישור ההצטרפות לקבוצת הפייבוקס לתשלום קופת האוכל:
+        </p>
+
+        <form onSubmit={handleSavePaybox} className="space-y-2">
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={payboxInput}
+              onChange={(e) => setPayboxInput(e.target.value)}
+              placeholder="https://payboxapp.page.link/..."
+              className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+            <button
+              type="submit"
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1 shrink-0 ${
+                payboxSaved
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+            >
+              {payboxSaved ? <Check className="w-3.5 h-3.5" /> : null}
+              <span>{payboxSaved ? 'נשמר ✓' : 'שמור'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
       {/* 📲 PWA INSTALL ON PHONE BANNER */}
       <div className="bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-3xl p-4 shadow-md space-y-2">
         <div className="flex items-center gap-2">
@@ -164,7 +210,7 @@ export default function SettingsTab({
           <span>העלאה לשרת ודומיין אישי</span>
         </h3>
         <p className="text-xs text-slate-600 leading-relaxed">
-          ניתן להעלות את הפרויקט ישירות ל-<strong>Vercel</strong> או <strong>Cloudflare Pages</strong> בחינם, ולחבר כל דומיין שתרצו (כגון: <code className="bg-slate-100 px-1 rounded">food.mycompany.co.il</code>).
+          האתר מחובר למאגר ה-GitHub שלכם (<code className="bg-slate-100 px-1 rounded font-bold">raful222/shuk-kitchen</code>) עם צינור CI/CD מלא שמעדכן אוטומטית כל שינוי!
         </p>
       </div>
 

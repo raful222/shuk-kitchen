@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Sparkles, CheckCircle2, Circle, Phone, RefreshCw, 
   UtensilsCrossed, Scale, Flame, Users, AlertTriangle, 
-  ChevronDown, Check, MessageCircle, AlertCircle
+  ChevronDown, Check, MessageCircle, AlertCircle, Layers
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { DAYS_OF_WEEK } from '../data/initialData';
@@ -31,7 +31,6 @@ export default function TodayTab({
   const todayOpenSwaps = swapRequests.filter(s => s.status === 'open' && s.dayKey === currentDayKey);
 
   // Calculate today's attendees:
-  // Base is weekly attendance for today, overridden by dailyOverrides if set
   const getIsAttendingToday = (memberId) => {
     if (dailyOverrides[memberId] !== undefined) {
       return dailyOverrides[memberId];
@@ -42,10 +41,14 @@ export default function TodayTab({
   const attendees = members.filter(m => getIsAttendingToday(m.id));
   const attendeeCount = attendees.length;
 
-  // Meal quantity calculation
-  const gramsPerPerson = dailyMenu.gramsPerPerson || 300;
-  const totalGramsNeeded = attendeeCount * gramsPerPerson;
-  const totalKgNeeded = (totalGramsNeeded / 1000).toFixed(1);
+  // Smart Plate / Tray calculation:
+  // In Machsanei HaShuk, meat is sold in "plates" / "trays" (~850g-950g each).
+  // Default: ~3 servings per plate
+  const portionsPerPlate = dailyMenu.portionsPerPlate || 3;
+  const rawPlatesNeeded = attendeeCount > 0 ? (attendeeCount / portionsPerPlate) : 0;
+  // Round to nearest half plate: e.g. 2.3 -> 2.5
+  const roundedPlates = Math.ceil(rawPlatesNeeded * 2) / 2;
+  const approxKg = (roundedPlates * 0.9).toFixed(1);
 
   // Check if any of today's cooks is absent
   const absentCooks = assignedCooks.filter(cook => !getIsAttendingToday(cook.id));
@@ -64,12 +67,12 @@ export default function TodayTab({
   };
 
   const sideDishOptions = [
+    '🥥 אורז קוקוס עשיר',
+    '🌾 בורגול עבה עם בצל',
     'אורז לבן קלאסי',
     'פתיתים אפויים',
     'תפוחי אדמה בתנור',
     'סלט ירקות ישראלי עשיר',
-    'שעועית ירוקה מוקפצת',
-    'פסטה ברוטב עגבניות',
   ];
 
   return (
@@ -205,7 +208,7 @@ export default function TodayTab({
         </div>
       </div>
 
-      {/* 🍗 CARD: WHAT ARE WE COOKING & PORTION CALCULATOR */}
+      {/* 🍗 CARD: WHAT ARE WE COOKING & TRAY/PLATE CALCULATOR */}
       <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/80 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -214,7 +217,7 @@ export default function TodayTab({
             </div>
             <div>
               <h3 className="font-extrabold text-sm text-slate-800">מה מבשלים היום?</h3>
-              <p className="text-[11px] text-slate-500">מחסני השוק: חזה עוף / פרגיות + תוספת</p>
+              <p className="text-[11px] text-slate-500">מחסני השוק: חישוב לפי פלטות בשר + תוספת</p>
             </div>
           </div>
           <span className="text-xs bg-slate-100 text-slate-700 font-bold px-2.5 py-1 rounded-full">
@@ -227,9 +230,9 @@ export default function TodayTab({
           <label className="block text-xs font-bold text-slate-600 mb-1.5">בחירת מנה עיקרית:</label>
           <div className="grid grid-cols-3 gap-2">
             {[
-              { id: 'chicken_breast', label: 'חזה עוף טרי', icon: '🍗' },
-              { id: 'pargiyot', label: 'פרגיות מובחרות', icon: '🥩' },
-              { id: 'both', label: 'משולב (שניהם)', icon: '🔥' },
+              { id: 'chicken_breast', label: 'חזה עוף (פלטות)', icon: '🍗' },
+              { id: 'pargiyot', label: 'פרגיות (פלטות)', icon: '🥩' },
+              { id: 'both', label: 'משולב (חצי-חצי)', icon: '🔥' },
             ].map(item => (
               <button
                 key={item.id}
@@ -247,25 +250,26 @@ export default function TodayTab({
           </div>
         </div>
 
-        {/* Smart Portion Calculator Box */}
+        {/* Smart Plate / Tray Calculator Box */}
         <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-orange-200 rounded-2xl p-3.5 space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="font-bold text-slate-700 flex items-center gap-1">
-              <Scale className="w-3.5 h-3.5 text-orange-600" />
-              מחשבון כמויות להפשרה / בישול:
+              <Layers className="w-3.5 h-3.5 text-orange-600" />
+              כמה פלטות להפשיר / לבשל?
             </span>
             <div className="flex items-center gap-1">
-              {[250, 300, 350].map(grams => (
+              <span className="text-[10px] text-slate-500">מנות לפלטה:</span>
+              {[2.5, 3, 3.5].map(ratio => (
                 <button
-                  key={grams}
-                  onClick={() => onUpdateDailyMenu({ ...dailyMenu, gramsPerPerson: grams })}
+                  key={ratio}
+                  onClick={() => onUpdateDailyMenu({ ...dailyMenu, portionsPerPlate: ratio })}
                   className={`text-[10px] px-2 py-0.5 rounded-lg font-bold ${
-                    gramsPerPerson === grams
+                    portionsPerPlate === ratio
                       ? 'bg-orange-600 text-white'
                       : 'bg-white text-slate-600 border border-slate-200'
                   }`}
                 >
-                  {grams} גרם
+                  {ratio}
                 </button>
               ))}
             </div>
@@ -273,11 +277,12 @@ export default function TodayTab({
 
           <div className="flex items-baseline justify-between pt-1">
             <span className="text-xs text-slate-600">
-              {attendeeCount} סועדים × {gramsPerPerson} גרם
+              {attendeeCount} סועדים במשרד
             </span>
             <div className="text-left">
-              <span className="text-xl font-black text-orange-700">{totalKgNeeded}</span>
-              <span className="text-xs font-bold text-orange-700 mr-1">ק"ג בשר</span>
+              <span className="text-2xl font-black text-orange-700">{roundedPlates}</span>
+              <span className="text-xs font-bold text-orange-700 mr-1">פלטות</span>
+              <span className="text-[11px] text-slate-500 mr-1.5">(~{approxKg} ק"ג)</span>
             </div>
           </div>
         </div>
