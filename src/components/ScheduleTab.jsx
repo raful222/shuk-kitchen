@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { DAYS_OF_WEEK } from '../data/initialData';
-import { validateMemberAttendance } from '../utils/helpers';
+import { validateMemberAttendance, getWorkWeekDates } from '../utils/helpers';
 
 export default function ScheduleTab({
   members = [],
@@ -19,6 +19,9 @@ export default function ScheduleTab({
   onAutoGenerateSchedule,
 }) {
   const [filterMode, setFilterMode] = useState('all');
+
+  // Exact dates for the workweek
+  const weekDates = getWorkWeekDates();
 
   // Calculate total attendees for each day of the week
   const dayTotals = DAYS_OF_WEEK.reduce((acc, day) => {
@@ -59,12 +62,33 @@ export default function ScheduleTab({
         </p>
 
         <div className="grid grid-cols-5 gap-1 pt-1 text-center text-[10px]">
-          {DAYS_OF_WEEK.map(d => (
-            <div key={d.key} className="py-1 rounded-lg bg-white/10 text-blue-200">
-              <div className="font-bold text-white">{d.name}</div>
-              <div className="font-black text-amber-300 mt-0.5">{dayTotals[d.key] || 0} סועדים</div>
-            </div>
-          ))}
+          {DAYS_OF_WEEK.map(d => {
+            const dateInfo = weekDates[d.key] || {};
+            const count = dayTotals[d.key] || 0;
+            const hasDuty = count > 4;
+
+            return (
+              <div 
+                key={d.key} 
+                className={`py-1.5 px-0.5 rounded-xl transition ${
+                  dateInfo.isToday 
+                    ? 'bg-amber-400 text-slate-900 font-black shadow-sm ring-2 ring-white/50' 
+                    : 'bg-white/10 text-blue-100'
+                }`}
+              >
+                <div className="font-extrabold text-[11px] leading-tight">{d.name}</div>
+                <div className={`text-[10px] ${dateInfo.isToday ? 'text-slate-900 font-bold' : 'text-blue-200'}`}>
+                  {dateInfo.dateFormatted}
+                </div>
+                <div className={`font-black text-[10px] mt-0.5 ${dateInfo.isToday ? 'text-slate-900' : hasDuty ? 'text-emerald-300' : 'text-amber-300'}`}>
+                  {count} איש
+                </div>
+                <div className={`text-[8px] font-bold ${dateInfo.isToday ? 'text-slate-800' : hasDuty ? 'text-emerald-300' : 'text-slate-300'}`}>
+                  {hasDuty ? 'תורנות' : 'אין תורנות'}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -110,41 +134,78 @@ export default function ScheduleTab({
             const dayShift = schedule[day.key] || { actualMembers: [], completed: false };
             const assignedMembers = members.filter(m => (dayShift.actualMembers || []).includes(m.id));
             const countForDay = dayTotals[day.key] || 0;
+            const dateInfo = weekDates[day.key] || {};
+            const hasDuty = countForDay > 4;
 
             return (
               <div 
                 key={day.key}
-                className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-xs flex items-center justify-between gap-3"
+                className={`bg-white rounded-2xl p-3.5 border shadow-xs flex items-center justify-between gap-3 transition ${
+                  dateInfo.isToday ? 'border-orange-400 ring-2 ring-orange-200/50' : 'border-slate-200'
+                }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-slate-100 text-slate-800 flex flex-col items-center justify-center font-black">
-                    <span className="text-xs leading-none">{day.name}</span>
-                    <span className="text-[9px] font-bold text-slate-500 mt-0.5">
+                  <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-black shrink-0 ${
+                    dateInfo.isToday 
+                      ? 'bg-orange-600 text-white shadow-sm' 
+                      : 'bg-slate-100 text-slate-800'
+                  }`}>
+                    <span className="text-xs leading-none">יום {day.short}׳</span>
+                    <span className={`text-[10px] font-bold mt-0.5 ${dateInfo.isToday ? 'text-orange-100' : 'text-orange-600'}`}>
+                      {dateInfo.dateFormatted}
+                    </span>
+                    <span className={`text-[9px] font-medium ${dateInfo.isToday ? 'text-white/80' : 'text-slate-500'}`}>
                       {countForDay} איש
                     </span>
                   </div>
 
                   <div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-xs font-bold text-slate-800">
-                        {assignedMembers.length > 0 
-                          ? assignedMembers.map(m => m.name).join(' & ') 
-                          : 'טרם שובץ זוג (לחץ "חולל לו"ז")'}
+                        יום {day.name} ({dateInfo.dateFormatted})
                       </span>
-                      {dayShift.completed && (
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded-md">
-                          הושלם ✓
+                      {dateInfo.isToday && (
+                        <span className="text-[10px] bg-orange-100 text-orange-800 font-black px-1.5 py-0.2 rounded-md">
+                          היום!
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
-                      <span>{assignedMembers.map(m => m.avatar).join(' ')}</span>
-                      <span>אחראים על בישול וסיום שטיפת כלים</span>
-                    </div>
+
+                    {hasDuty ? (
+                      <div className="mt-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-slate-900">
+                            {assignedMembers.length > 0 
+                              ? assignedMembers.map(m => m.name).join(' & ') 
+                              : 'טרם שובץ זוג (לחץ "חולל לו"ז")'}
+                          </span>
+                          {dayShift.completed && (
+                            <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded-md">
+                              הושלם ✓
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
+                          <span>{assignedMembers.map(m => m.avatar).join(' ')}</span>
+                          <span>אחראים על בישול וסיום שטיפת כלים</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-extrabold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200">
+                            🏖️ אין תורנות (פחות מ-5 סועדים)
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          רשומים {countForDay} סועדים • תורנות פעילה רק כאשר יש מעל 4 אנשים
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {assignedMembers.length > 0 && (
+                {hasDuty && assignedMembers.length > 0 && (
                   <button
                     onClick={() => onOpenSwapModal(day.key)}
                     className="bg-slate-50 hover:bg-orange-50 border border-slate-200 hover:border-orange-200 p-2 rounded-xl text-slate-600 hover:text-orange-700 transition active:scale-95 shrink-0"

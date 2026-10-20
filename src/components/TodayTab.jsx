@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { DAYS_OF_WEEK, SIDE_DISH_CONFIG } from '../data/initialData';
+import { getHebrewDateString, getWorkWeekDates } from '../utils/helpers';
 
 export default function TodayTab({
   currentDayKey,
@@ -23,6 +24,8 @@ export default function TodayTab({
 }) {
   const currentDayObj = DAYS_OF_WEEK.find(d => d.key === currentDayKey) || DAYS_OF_WEEK[0];
   const daySchedule = schedule[currentDayKey] || { actualMembers: [], completed: false };
+  const weekDates = getWorkWeekDates();
+  const todayDateFormatted = weekDates[currentDayKey]?.dateFormatted || '';
   
   // Find the assigned members for today
   const assignedMemberIds = daySchedule.actualMembers || [];
@@ -42,6 +45,9 @@ export default function TodayTab({
   const attendees = members.filter(m => getIsAttendingToday(m.id));
   const attendeeCount = attendees.length;
 
+  // 4-Person threshold rule: duty ONLY takes place when strictly > 4 attendees (>= 5)
+  const isDutyActive = attendeeCount > 4;
+
   // 1. Meat Plate / Tray calculation:
   const portionsPerPlate = dailyMenu.portionsPerPlate || 3;
   const rawPlatesNeeded = attendeeCount > 0 ? (attendeeCount / portionsPerPlate) : 0;
@@ -56,8 +62,8 @@ export default function TodayTab({
   const rawPackagesNeeded = attendeeCount > 0 ? (attendeeCount / servingsPerPackage) : 0;
   const roundedPackages = Math.ceil(rawPackagesNeeded * 2) / 2;
 
-  // Check if any of today's cooks is absent
-  const absentCooks = assignedCooks.filter(cook => !getIsAttendingToday(cook.id));
+  // Check if any of today's cooks is absent (only relevant if duty is active)
+  const absentCooks = isDutyActive ? assignedCooks.filter(cook => !getIsAttendingToday(cook.id)) : [];
 
   const handleToggleCompleted = () => {
     const nextState = !daySchedule.completed;
@@ -106,6 +112,24 @@ export default function TodayTab({
         </div>
       )}
 
+      {/* 🏖️ NO DUTY BANNER (IF ATTENDEES <= 4) */}
+      {members.length > 0 && !isDutyActive && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-3xl p-4 flex items-start gap-3 shadow-xs">
+          <span className="text-2xl shrink-0">🏖️</span>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h4 className="text-xs font-black text-amber-950">אין תורנות בישול וכלים היום!</h4>
+              <span className="text-[10px] bg-amber-200/80 text-amber-900 font-black px-2 py-0.5 rounded-full">
+                {attendeeCount} סועדים
+              </span>
+            </div>
+            <p className="text-xs text-amber-900 mt-1 leading-relaxed">
+              לפי הכלל, תורנות בישול ושטיפת כלים מתקיימת רק בימים שבהם יש <strong>מעל 4 אנשים</strong> (5 סועדים ומעלה).
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ⚠️ ABSENT COOK ALERT */}
       {absentCooks.length > 0 && (
         <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-3.5 flex items-start gap-3 shadow-sm animate-pulse">
@@ -127,7 +151,7 @@ export default function TodayTab({
       )}
 
       {/* 🔔 OPEN SWAPS BANNER */}
-      {todayOpenSwaps.length > 0 && (
+      {isDutyActive && todayOpenSwaps.length > 0 && (
         <div className="bg-amber-500 text-amber-950 p-3 rounded-2xl flex items-center justify-between shadow-md">
           <div className="flex items-center gap-2">
             <span className="text-xl">🔄</span>
@@ -149,19 +173,25 @@ export default function TodayTab({
       <div className={`rounded-3xl p-5 shadow-lg border transition-all ${
         daySchedule.completed 
           ? 'bg-gradient-to-br from-emerald-50 via-teal-50 to-green-100 border-emerald-300' 
-          : 'bg-gradient-to-br from-orange-50 via-white to-amber-50/50 border-orange-200'
+          : !isDutyActive
+            ? 'bg-gradient-to-br from-slate-50 via-amber-50/40 to-slate-100 border-slate-200'
+            : 'bg-gradient-to-br from-orange-50 via-white to-amber-50/50 border-orange-200'
       }`}>
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-black bg-orange-600 text-white px-2.5 py-0.5 rounded-full tracking-wide">
-              יום {currentDayObj.name}
+              יום {currentDayObj.name} {todayDateFormatted && `• ${todayDateFormatted}`}
             </span>
-            <span className="text-xs font-bold text-slate-500">
-              {attendeeCount} סועדים היום
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+              isDutyActive 
+                ? 'bg-emerald-100 text-emerald-800' 
+                : 'bg-amber-100 text-amber-800'
+            }`}>
+              {attendeeCount} סועדים {isDutyActive ? '(תורנות פעילה)' : '(פטור מתורנות)'}
             </span>
           </div>
 
-          {members.length > 0 && (
+          {isDutyActive && members.length > 0 && (
             <button
               onClick={() => onOpenSwapModal(currentDayKey)}
               className="text-xs font-bold text-orange-700 hover:text-orange-900 flex items-center gap-1 bg-white/80 px-2.5 py-1 rounded-full border border-orange-200/80 shadow-xs"
@@ -172,76 +202,99 @@ export default function TodayTab({
           )}
         </div>
 
-        <div className="text-center my-2">
-          <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wider">
-            צמד התורנים להיום (בישול + כלים)
-          </h2>
-          {assignedCooks.length > 0 ? (
-            <div className="mt-3 flex items-center justify-center gap-4">
-              {assignedCooks.map((cook, idx) => (
-                <div key={cook.id} className="flex flex-col items-center">
-                  <div className="relative">
-                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-tr ${cook.color || 'from-orange-400 to-amber-500'} text-white text-3xl flex items-center justify-center shadow-md border-2 border-white`}>
-                      {cook.avatar || '👨‍🍳'}
+        {isDutyActive ? (
+          <>
+            <div className="text-center my-2">
+              <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wider">
+                צמד התורנים להיום (בישול + כלים)
+              </h2>
+              {assignedCooks.length > 0 ? (
+                <div className="mt-3 flex items-center justify-center gap-4">
+                  {assignedCooks.map((cook, idx) => (
+                    <div key={cook.id} className="flex flex-col items-center">
+                      <div className="relative">
+                        <div className={`w-16 h-16 rounded-2xl bg-gradient-to-tr ${cook.color || 'from-orange-400 to-amber-500'} text-white text-3xl flex items-center justify-center shadow-md border-2 border-white`}>
+                          {cook.avatar || '👨‍🍳'}
+                        </div>
+                        <span className="absolute -bottom-1 -right-1 bg-slate-900 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                          {idx === 0 ? 'תורן 1' : 'תורן 2'}
+                        </span>
+                      </div>
+                      <span className="font-extrabold text-sm text-slate-800 mt-2">{cook.name}</span>
+                      {cook.phone && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <a
+                            href={`tel:${cook.phone}`}
+                            className="p-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition"
+                            title="חייג"
+                          >
+                            <Phone className="w-3 h-3" />
+                          </a>
+                          <a
+                            href={`https://wa.me/972${cook.phone.replace(/[^0-9]/g, '').slice(-9)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-700 transition"
+                            title="וואטסאפ"
+                          >
+                            <MessageCircle className="w-3 h-3" />
+                          </a>
+                        </div>
+                      )}
                     </div>
-                    <span className="absolute -bottom-1 -right-1 bg-slate-900 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full">
-                      {idx === 0 ? 'תורן 1' : 'תורן 2'}
-                    </span>
-                  </div>
-                  <span className="font-extrabold text-sm text-slate-800 mt-2">{cook.name}</span>
-                  {cook.phone && (
-                    <div className="flex items-center gap-1 mt-1">
-                      <a
-                        href={`tel:${cook.phone}`}
-                        className="p-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition"
-                        title="חייג"
-                      >
-                        <Phone className="w-3 h-3" />
-                      </a>
-                      <a
-                        href={`https://wa.me/972${cook.phone.replace(/[^0-9]/g, '').slice(-9)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-700 transition"
-                        title="וואטסאפ"
-                      >
-                        <MessageCircle className="w-3 h-3" />
-                      </a>
-                    </div>
-                  )}
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <p className="text-xs text-slate-500 mt-3 italic">
+                  טרם שובצו תורנים ליום זה
+                </p>
+              )}
             </div>
-          ) : (
-            <p className="text-xs text-slate-500 mt-3 italic">
-              טרם שובצו תורנים ליום זה
-            </p>
-          )}
-        </div>
 
-        {/* Completion status toggle */}
-        <div className="mt-5 pt-4 border-t border-slate-200/60">
-          <button
-            onClick={handleToggleCompleted}
-            className={`w-full py-3 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-sm ${
-              daySchedule.completed
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                : 'bg-white border-2 border-orange-300 text-orange-700 hover:bg-orange-50'
-            }`}
-          >
-            {daySchedule.completed ? (
-              <>
-                <CheckCircle2 className="w-4 h-4 text-white" />
-                <span>התורנות הושלמה: האוכל מוכן והכלים נקיים! ✨</span>
-              </>
-            ) : (
-              <>
-                <Circle className="w-4 h-4 text-orange-400" />
-                <span>סמן כהושלם (בישול + שטיפת כלים בסיום)</span>
-              </>
-            )}
-          </button>
-        </div>
+            {/* Completion status toggle */}
+            <div className="mt-5 pt-4 border-t border-slate-200/60">
+              <button
+                onClick={handleToggleCompleted}
+                className={`w-full py-3 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-sm ${
+                  daySchedule.completed
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    : 'bg-white border-2 border-orange-300 text-orange-700 hover:bg-orange-50'
+                }`}
+              >
+                {daySchedule.completed ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-white" />
+                    <span>התורנות הושלמה: האוכל מוכן והכלים נקיים! ✨</span>
+                  </>
+                ) : (
+                  <>
+                    <Circle className="w-4 h-4 text-orange-400" />
+                    <span>סמן כהושלם (בישול + שטיפת כלים בסיום)</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="py-4 text-center space-y-2">
+            <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-3xl mx-auto shadow-inner">
+              🏖️
+            </div>
+            <h2 className="text-sm font-black text-slate-800">
+              פטור מתורנות להיום
+            </h2>
+            <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+              {assignedCooks.length > 0 
+                ? `הזוג המשובץ בלו"ז (${assignedCooks.map(c => c.name).join(' & ')}) פטור מתורנות בישול וכלים עקב נוכחות של 4 סועדים ומטה.` 
+                : 'אין צורך בתורנות בישול וכלים היום (נוכחות מתחת ל-5 אנשים).'}
+            </p>
+            <div className="pt-2">
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+                ✓ פטור מבישול ושטיפת כלים
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 🍗 CARD: WHAT ARE WE COOKING & PORTION CALCULATORS */}

@@ -2,23 +2,30 @@ import React, { useState } from 'react';
 import { 
   Wallet, DollarSign, Plus, Receipt, TrendingUp, 
   ArrowUpRight, ArrowDownLeft, Check, Users, ExternalLink,
-  Camera, Image as ImageIcon, X, Send, AlertCircle, UserPlus
+  Camera, Image as ImageIcon, X, Send, AlertCircle, UserPlus,
+  HelpCircle, Share2, CornerDownLeft, CreditCard, RefreshCw
 } from 'lucide-react';
+import { generateWhatsAppDebtSummary } from '../utils/helpers';
 
 export default function BudgetTab({
   expenses = [],
   deposits = [],
+  withdrawals = [],
   members = [],
   payboxLink = 'https://payboxapp.page.link/shuk-kitchen',
   onAddExpense,
   onAddDeposit,
+  onAddWithdrawal,
   onToggleMemberPayment,
   onUpdatePayboxLink,
   onOpenSettings,
 }) {
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
   const [showAddDepositModal, setShowAddDepositModal] = useState(false);
+  const [showAddWithdrawalModal, setShowAddWithdrawalModal] = useState(false);
   const [viewingReceiptImage, setViewingReceiptImage] = useState(null);
+  const [showPayboxExplanation, setShowPayboxExplanation] = useState(false);
+  const [historyTab, setHistoryTab] = useState('expenses'); // 'expenses' | 'withdrawals' | 'deposits'
 
   // New expense form
   const [expenseStore, setExpenseStore] = useState('מחסני השוק');
@@ -31,16 +38,49 @@ export default function BudgetTab({
   const [depositMemberId, setDepositMemberId] = useState('');
   const [depositAmount, setDepositAmount] = useState('');
 
+  // New withdrawal form
+  const [withdrawalMemberId, setWithdrawalMemberId] = useState('');
+  const [withdrawalAmount, setWithdrawalAmount] = useState('');
+  const [withdrawalReason, setWithdrawalReason] = useState('');
+
   // Calculations
-  const totalDeposits = deposits.reduce((sum, d) => sum + Number(d.amount), 0);
-  const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
-  const fundBalance = totalDeposits - totalExpenses;
+  const totalDeposits = deposits.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+  const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const totalWithdrawals = withdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
 
-  // Payment status stats
-  const paidMembersCount = members.filter(m => !!m.paidThisMonth).length;
+  // Direct expenses paid straight from the common fund (not from private pocket)
+  const directFundExpenses = expenses
+    .filter(e => e.paidBy === 'קופת מזומן משותפת' || e.paidBy === 'קופת פייבוקס')
+    .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+  // In a PayBox pool: Fund Balance = Deposits - Withdrawals - Direct Pool Expenses
+  const fundBalance = totalDeposits - totalWithdrawals - directFundExpenses;
+
+  // Member Balances & Reimbursements ("מי חייב למי")
+  const memberLedger = members.map(m => {
+    const memberExpenses = expenses.filter(e => e.paidBy === m.name);
+    const paidOutOfPocket = memberExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const memberWithdrawals = withdrawals.filter(w => w.memberId === m.id);
+    const withdrawn = memberWithdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
+    const reimbursementDue = Math.max(0, paidOutOfPocket - withdrawn);
+    const memberDeposits = deposits.filter(d => d.memberId === m.id);
+    const totalDeposited = memberDeposits.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+
+    return {
+      member: m,
+      paidOutOfPocket,
+      withdrawn,
+      reimbursementDue,
+      totalDeposited,
+      hasPaidThisMonth: !!m.paidThisMonth,
+    };
+  });
+
+  const creditorMembers = memberLedger.filter(item => item.reimbursementDue > 0);
   const unpaidMembers = members.filter(m => !m.paidThisMonth);
+  const paidMembersCount = members.filter(m => !!m.paidThisMonth).length;
 
-  // Approximate cost per meal
+  // Cost per meal estimation
   const estimatedMealsCount = members.length > 0 ? (members.length * 3 * 3) : 0;
   const costPerMeal = estimatedMealsCount > 0 ? (totalExpenses / estimatedMealsCount).toFixed(1) : 0;
 
@@ -93,14 +133,51 @@ export default function BudgetTab({
     setShowAddDepositModal(false);
   };
 
-  const handleSendUnpaidReminder = () => {
-    if (unpaidMembers.length === 0) {
-      alert('כולם שילמו החודש! איזה כיף 🎉');
-      return;
-    }
+  const handleCreateWithdrawal = (e) => {
+    e.preventDefault();
+    if (!withdrawalMemberId || !withdrawalAmount) return;
 
-    const names = unpaidMembers.map(m => m.name).join(', ');
-    const text = `היי חברים, תזכורת ידידותית לקופת האוכל של מחסני השוק 🛒🍗\nחברים שטרם העבירו: ${names}\n\nלתשלום ישיר בפייבוקס: ${payboxLink}\nתודה לכולם!`;
+    const member = members.find(m => m.id === withdrawalMemberId);
+    onAddWithdrawal({
+      id: `with-${Date.now()}`,
+      memberId: withdrawalMemberId,
+      memberName: member?.name || 'חבר צוות',
+      amount: parseFloat(withdrawalAmount),
+      reason: withdrawalReason.trim() || 'החזר כספי על קנייה במחסני השוק',
+      date: new Date().toISOString().split('T')[0],
+    });
+
+    setWithdrawalAmount('');
+    setWithdrawalMemberId('');
+    setWithdrawalReason('');
+    setShowAddWithdrawalModal(false);
+  };
+
+  const handleOpenWithdrawalForMember = (memberId, defaultAmount) => {
+    setWithdrawalMemberId(memberId);
+    setWithdrawalAmount(defaultAmount > 0 ? String(defaultAmount) : '');
+    setWithdrawalReason('החזר על קניות מחסני השוק');
+    setShowAddWithdrawalModal(true);
+  };
+
+  const handleOpenDepositForMember = (memberId) => {
+    setDepositMemberId(memberId);
+    setDepositAmount('150');
+    setShowAddDepositModal(true);
+  };
+
+  const handleShareDebtSummary = () => {
+    const text = generateWhatsAppDebtSummary({
+      members,
+      payboxLink,
+      fundBalance,
+      unpaidMembers,
+      reimbursementsDue: creditorMembers.map(c => ({
+        name: c.member.name,
+        amount: c.reimbursementDue,
+        reason: 'קניות מכספו/ה האישי',
+      })),
+    });
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(whatsappUrl, '_blank');
   };
@@ -108,30 +185,56 @@ export default function BudgetTab({
   return (
     <div className="space-y-4 pb-20 pt-2 px-3 sm:px-4 max-w-md mx-auto">
       
-      {/* 💳 PAYBOX PROMINENT DIRECT LINK BANNER */}
-      <div className="bg-gradient-to-r from-blue-600 via-sky-600 to-blue-700 text-white rounded-3xl p-4 shadow-lg flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-white text-blue-600 flex items-center justify-center font-black text-2xl shadow-md shrink-0">
-            PB
+      {/* 💳 PAYBOX PROMINENT DIRECT LINK & INFO BANNER */}
+      <div className="bg-gradient-to-r from-blue-600 via-sky-600 to-blue-700 text-white rounded-3xl p-4 shadow-lg space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-white text-blue-600 flex items-center justify-center font-black text-2xl shadow-md shrink-0">
+              PB
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h3 className="font-black text-sm">קבוצת ה-PayBox</h3>
+                <button
+                  onClick={() => setShowPayboxExplanation(!showPayboxExplanation)}
+                  className="text-blue-200 hover:text-white"
+                  title="הסבר על חיבור אוטומטי"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <p className="text-[11px] text-blue-100">קופת האוכל המשותפת של הצוות</p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-black text-sm">תשלום ישיר ב-PayBox</h3>
-            <p className="text-[11px] text-blue-100">קופת האוכל המשותפת של הצוות</p>
-          </div>
+
+          <a
+            href={payboxLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-white text-blue-700 hover:bg-blue-50 font-extrabold text-xs px-3.5 py-2.5 rounded-2xl shadow-md flex items-center gap-1.5 transition active:scale-95 shrink-0"
+          >
+            <span>פתח PayBox</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
         </div>
 
-        <a
-          href={payboxLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="bg-white text-blue-700 hover:bg-blue-50 font-extrabold text-xs px-3.5 py-2.5 rounded-2xl shadow-md flex items-center gap-1.5 transition active:scale-95 shrink-0"
-        >
-          <span>פתח PayBox</span>
-          <ExternalLink className="w-3.5 h-3.5" />
-        </a>
+        {/* Info callout on how PayBox sync works */}
+        {showPayboxExplanation && (
+          <div className="bg-blue-900/60 rounded-2xl p-3 text-[11px] text-blue-100 space-y-1.5 border border-blue-400/30">
+            <div className="font-bold flex items-center gap-1 text-amber-300">
+              <span>💡 איך עובד המעקב אחר כספי PayBox?</span>
+            </div>
+            <p className="leading-relaxed">
+              אפליקציית פייבוקס שייכת לבנק דיסקונט ומאובטחת בקפדנות בנקאית (קוד SMS), ולכן לא מאפשרת משיכת נתונים אוטומטית מאפליקציות חיצוניות.
+            </p>
+            <p className="leading-relaxed font-medium">
+              המערכת כאן מנהלת עבורכם את הספר במדויק: כל הפקדה, משיכת החזר או קבלה מתועדים בזמן אמת, והיתרה והחובות מחושבים אוטומטית לכל חבר צוות.
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* 💰 FUND BALANCE HERO */}
+      {/* 💰 FUND BALANCE HERO CARD */}
       <div className={`rounded-3xl p-5 text-white shadow-lg space-y-3 ${
         fundBalance >= 0 
           ? 'bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700' 
@@ -143,7 +246,7 @@ export default function BudgetTab({
               <Wallet className="w-5 h-5 text-white" />
             </div>
             <div>
-              <span className="text-xs text-white/80 block font-medium">יתרת קופת אוכל:</span>
+              <span className="text-xs text-white/80 block font-medium">יתרת קופת פייבוקס מחושבת:</span>
               <div className="flex items-baseline gap-1">
                 <span className="text-3xl font-black">{Math.round(fundBalance)}</span>
                 <span className="text-sm font-bold text-white/90">₪</span>
@@ -157,49 +260,169 @@ export default function BudgetTab({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/20">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-emerald-400/30 flex items-center justify-center text-xs">
-              ↓
-            </div>
-            <div>
-              <span className="text-[10px] text-white/80 block">הופקד בקופה:</span>
-              <span className="text-xs font-bold">{totalDeposits} ₪</span>
-            </div>
+        {/* 3 Metrics: Deposits, Supermarket Expenses, Withdrawals */}
+        <div className="grid grid-cols-3 gap-1 pt-2 border-t border-white/20 text-center">
+          <div className="p-1.5 rounded-xl bg-black/10">
+            <span className="text-[9px] text-white/80 block">הופקד בקופה:</span>
+            <span className="text-xs font-bold text-emerald-200">+{totalDeposits} ₪</span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-rose-400/30 flex items-center justify-center text-xs">
-              ↑
-            </div>
-            <div>
-              <span className="text-[10px] text-white/80 block">הוצאות (מחסני השוק):</span>
-              <span className="text-xs font-bold">{totalExpenses} ₪</span>
-            </div>
+          <div className="p-1.5 rounded-xl bg-black/10">
+            <span className="text-[9px] text-white/80 block">קניות (מחסני השוק):</span>
+            <span className="text-xs font-bold text-amber-200">{totalExpenses} ₪</span>
+          </div>
+
+          <div className="p-1.5 rounded-xl bg-black/10">
+            <span className="text-[9px] text-white/80 block">נמשך כהחזרים:</span>
+            <span className="text-xs font-bold text-rose-200">-{totalWithdrawals} ₪</span>
           </div>
         </div>
 
-        {/* Quick actions */}
-        <div className="grid grid-cols-2 gap-2 pt-1">
+        {/* Quick actions: Receipt, Deposit, Withdrawal */}
+        <div className="grid grid-cols-3 gap-1.5 pt-1">
           <button
             onClick={() => setShowAddExpenseModal(true)}
-            className="py-2.5 px-3 rounded-2xl bg-white text-slate-900 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm hover:bg-slate-50 active:scale-95 transition"
+            className="py-2 px-2 rounded-2xl bg-white text-slate-900 font-bold text-[11px] flex items-center justify-center gap-1 shadow-sm hover:bg-slate-50 active:scale-95 transition"
           >
-            <Receipt className="w-3.5 h-3.5 text-orange-600" />
-            <span>הזנת קבלה + תמונה</span>
+            <Receipt className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+            <span>הזנת קבלה</span>
           </button>
 
           <button
             onClick={() => setShowAddDepositModal(true)}
-            className="py-2.5 px-3 rounded-2xl bg-black/30 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm hover:bg-black/40 active:scale-95 transition border border-white/20"
+            className="py-2 px-2 rounded-2xl bg-black/30 text-white font-bold text-[11px] flex items-center justify-center gap-1 shadow-sm hover:bg-black/40 active:scale-95 transition border border-white/20"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>רישום הפקדה</span>
+            <Plus className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+            <span>רשום הפקדה</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setWithdrawalMemberId('');
+              setWithdrawalAmount('');
+              setWithdrawalReason('');
+              setShowAddWithdrawalModal(true);
+            }}
+            className="py-2 px-2 rounded-2xl bg-black/30 text-white font-bold text-[11px] flex items-center justify-center gap-1 shadow-sm hover:bg-black/40 active:scale-95 transition border border-white/20"
+          >
+            <CornerDownLeft className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+            <span>משיכת החזר</span>
           </button>
         </div>
       </div>
 
-      {/* ✅ TRACKER: WHO PAID / WHO HASN'T PAID THIS MONTH */}
+      {/* ⚖️ SECTION: WHO OWES WHOM & PERSONAL REIMBURSEMENT STATUS */}
+      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/80 space-y-3.5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
+              <CreditCard className="w-4 h-4 text-orange-600" />
+              <span>מי חייב למי וזכאות להחזרים</span>
+            </h3>
+            <p className="text-[11px] text-slate-500">מי שילם מכספו הפרטי ומי טרם הפקיד</p>
+          </div>
+
+          <button
+            onClick={handleShareDebtSummary}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-2.5 py-1.5 rounded-xl shadow-xs flex items-center gap-1 transition active:scale-95"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>דוח בוואטסאפ</span>
+          </button>
+        </div>
+
+        {/* 1. Creditors (Owed refund from PayBox) */}
+        <div className="space-y-2">
+          <span className="text-xs font-bold text-slate-700 block">
+            🟢 מגיע להם החזר מפייבוקס (שילמו על קניות מכספם):
+          </span>
+
+          {creditorMembers.length === 0 ? (
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-center">
+              <span className="text-xs text-slate-500 font-medium">
+                ✅ כל מי ששילם מכספו קיבל החזר מלא. אין החזרים ממתינים.
+              </span>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {creditorMembers.map(item => (
+                <div
+                  key={item.member.id}
+                  className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-300 flex items-center justify-between gap-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{item.member.avatar || '👤'}</span>
+                    <div>
+                      <span className="font-extrabold text-xs text-slate-900 block">
+                        {item.member.name}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        שילם/ה {item.paidOutOfPocket} ₪ | נמשך {item.withdrawn} ₪
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black text-emerald-700">
+                      מגיע: {item.reimbursementDue} ₪
+                    </span>
+                    <button
+                      onClick={() => handleOpenWithdrawalForMember(item.member.id, item.reimbursementDue)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2 py-1 rounded-lg transition active:scale-95"
+                    >
+                      רשום החזר
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 2. Debtors (Haven't deposited yet) */}
+        <div className="space-y-2 pt-2 border-t border-slate-100">
+          <span className="text-xs font-bold text-slate-700 block">
+            🔴 חברים שטרם הפקידו החודש לקופה:
+          </span>
+
+          {unpaidMembers.length === 0 ? (
+            <div className="p-3 rounded-2xl bg-emerald-50/50 border border-emerald-200 text-center">
+              <span className="text-xs text-emerald-800 font-bold">
+                🎉 כולם הפקידו החודש! הקופה מלאה.
+              </span>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {unpaidMembers.map(m => (
+                <div
+                  key={m.id}
+                  className="p-2.5 rounded-2xl bg-rose-50/70 border border-rose-200 flex items-center justify-between gap-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{m.avatar || '👤'}</span>
+                    <span className="font-extrabold text-xs text-slate-800">{m.name}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-rose-600">
+                      טרם הפקיד/ה ⏳
+                    </span>
+                    <button
+                      onClick={() => handleOpenDepositForMember(m.id)}
+                      className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] px-2 py-1 rounded-lg transition active:scale-95"
+                    >
+                      רשום הפקדה
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* ✅ SECTION: MONTHLY PAYMENT STATUS (GRID CHECKLIST) */}
       <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/80 space-y-3">
         <div className="flex items-center justify-between">
           <div>
@@ -214,7 +437,7 @@ export default function BudgetTab({
 
           {unpaidMembers.length > 0 && members.length > 0 && (
             <button
-              onClick={handleSendUnpaidReminder}
+              onClick={handleShareDebtSummary}
               className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[11px] px-2.5 py-1.5 rounded-xl flex items-center gap-1 transition active:scale-95"
             >
               <Send className="w-3 h-3 text-emerald-600" />
@@ -271,68 +494,176 @@ export default function BudgetTab({
         )}
       </div>
 
-      {/* 🧾 EXPENSES LIST (RECEIPTS & PHOTO UPLOADS) */}
+      {/* 🧾 LOG SECTION: TABS FOR RECEIPTS VS WITHDRAWALS VS DEPOSITS */}
       <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/80 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
-            <Receipt className="w-4 h-4 text-orange-600" />
-            <span>קבלות מחסני השוק</span>
-          </h3>
-          <span className="text-xs text-slate-500 font-medium">{expenses.length} רכישות</span>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setHistoryTab('expenses')}
+              className={`text-xs px-2.5 py-1 rounded-xl font-bold transition ${
+                historyTab === 'expenses'
+                  ? 'bg-orange-600 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              קבלות קניות ({expenses.length})
+            </button>
+            <button
+              onClick={() => setHistoryTab('withdrawals')}
+              className={`text-xs px-2.5 py-1 rounded-xl font-bold transition ${
+                historyTab === 'withdrawals'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              משיכות החזרים ({withdrawals.length})
+            </button>
+            <button
+              onClick={() => setHistoryTab('deposits')}
+              className={`text-xs px-2.5 py-1 rounded-xl font-bold transition ${
+                historyTab === 'deposits'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              הפקדות ({deposits.length})
+            </button>
+          </div>
         </div>
 
-        {expenses.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-4 italic">
-            אין קבלות עדיין. לחץ למעלה על "הזנת קבלה + תמונה" כדי לתעד קנייה ראשונה.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {expenses.map(expense => (
-              <div
-                key={expense.id}
-                className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2"
-              >
-                <div className="flex items-center gap-2.5">
-                  {expense.receiptImage ? (
-                    <button
-                      onClick={() => setViewingReceiptImage(expense.receiptImage)}
-                      className="w-10 h-10 rounded-xl overflow-hidden border border-orange-300 shrink-0 relative group"
-                      title="לחץ לצפייה בקבלה"
-                    >
-                      <img
-                        src={expense.receiptImage}
-                        alt="קבלה"
-                        className="w-full h-full object-cover group-hover:scale-105 transition"
-                      />
-                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center text-white text-[10px]">
-                        🔍
+        {/* 1. Expenses / Receipts Tab */}
+        {historyTab === 'expenses' && (
+          <div>
+            {expenses.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-4 italic">
+                אין קבלות עדיין. לחץ למעלה על "הזנת קבלה" כדי לתעד קנייה.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {expenses.map(expense => (
+                  <div
+                    key={expense.id}
+                    className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {expense.receiptImage ? (
+                        <button
+                          onClick={() => setViewingReceiptImage(expense.receiptImage)}
+                          className="w-10 h-10 rounded-xl overflow-hidden border border-orange-300 shrink-0 relative group"
+                          title="לחץ לצפייה בקבלה"
+                        >
+                          <img
+                            src={expense.receiptImage}
+                            alt="קבלה"
+                            className="w-full h-full object-cover group-hover:scale-105 transition"
+                          />
+                          <div className="absolute inset-0 bg-black/20 flex items-center justify-center text-white text-[10px]">
+                            🔍
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center text-base shrink-0">
+                          🧾
+                        </div>
+                      )}
+
+                      <div>
+                        <h4 className="font-bold text-xs text-slate-800">{expense.description}</h4>
+                        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
+                          <span className="font-semibold text-orange-700">{expense.store}</span>
+                          <span>•</span>
+                          <span>שולם ע"י: {expense.paidBy}</span>
+                          <span>•</span>
+                          <span>{expense.date}</span>
+                        </div>
                       </div>
-                    </button>
-                  ) : (
-                    <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center text-base shrink-0">
-                      🧾
                     </div>
-                  )}
 
-                  <div>
-                    <h4 className="font-bold text-xs text-slate-800">{expense.description}</h4>
-                    <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
-                      <span className="font-semibold text-orange-700">{expense.store}</span>
-                      <span>•</span>
-                      <span>{expense.paidBy}</span>
-                      <span>•</span>
-                      <span>{expense.date}</span>
-                    </div>
+                    <span className="font-black text-sm text-rose-600 shrink-0">
+                      -{expense.amount} ₪
+                    </span>
                   </div>
-                </div>
-
-                <span className="font-black text-sm text-rose-600 shrink-0">
-                  -{expense.amount} ₪
-                </span>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
+
+        {/* 2. Withdrawals / Reimbursements Tab */}
+        {historyTab === 'withdrawals' && (
+          <div>
+            {withdrawals.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-4 italic">
+                אין משיכות החזרים עד כה. כאשר חבר צוות מושך כסף מפייבוקס על קנייה שעשה, רשמו זאת כאן.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {withdrawals.map(w => (
+                  <div
+                    key={w.id}
+                    className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center text-base shrink-0">
+                        💸
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-xs text-slate-800">{w.memberName || 'חבר צוות'} משך/ה החזר</h4>
+                        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
+                          <span>{w.reason || 'החזר קניות'}</span>
+                          <span>•</span>
+                          <span>{w.date}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <span className="font-black text-sm text-blue-700 shrink-0">
+                      -{w.amount} ₪
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. Deposits Tab */}
+        {historyTab === 'deposits' && (
+          <div>
+            {deposits.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-4 italic">
+                אין הפקדות רשומות עד כה.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {deposits.map(d => {
+                  const member = members.find(m => m.id === d.memberId);
+                  return (
+                    <div
+                      key={d.id}
+                      className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-base shrink-0">
+                          💰
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-xs text-slate-800">{member?.name || 'חבר צוות'}</h4>
+                          <span className="text-[11px] text-slate-500">{d.date}</span>
+                        </div>
+                      </div>
+
+                      <span className="font-black text-sm text-emerald-600 shrink-0">
+                        +{d.amount} ₪
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
 
       {/* 🖼️ VIEW RECEIPT IMAGE MODAL */}
@@ -424,8 +755,9 @@ export default function BudgetTab({
                 >
                   <option value="">בחר/י שם...</option>
                   <option value="קופת מזומן משותפת">קופת מזומן משותפת</option>
+                  <option value="קופת פייבוקס">קופת פייבוקס ישירה</option>
                   {members.map(m => (
-                    <option key={m.id} value={m.name}>{m.name}</option>
+                    <option key={m.id} value={m.name}>{m.name} (שילם מכספו הפרטי)</option>
                   ))}
                 </select>
               </div>
@@ -436,7 +768,7 @@ export default function BudgetTab({
                   type="text"
                   value={expenseDesc}
                   onChange={(e) => setExpenseDesc(e.target.value)}
-                  placeholder="למשל: 4 פלטות חזה עוף + פרגיות + אורז קוקוס..."
+                  placeholder="למשל: 4 פלטות חזה עוף + פרגיות + שקיות צ'יפס..."
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
                 />
               </div>
@@ -509,6 +841,75 @@ export default function BudgetTab({
                   className="px-4 py-2 text-xs font-bold bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700"
                 >
                   אשר הפקדה
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 💸 ADD WITHDRAWAL / REIMBURSEMENT MODAL */}
+      {showAddWithdrawalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl">
+            <h3 className="font-extrabold text-base text-slate-800">רישום משיכת החזר מפייבוקס</h3>
+            <p className="text-xs text-slate-500">
+              למי שהוציא/ה כסף מכיסו על קניות ומשך כעת החזר מקופת ה-PayBox לחשבונו
+            </p>
+
+            <form onSubmit={handleCreateWithdrawal} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">מי משך/ה החזר?</label>
+                <select
+                  value={withdrawalMemberId}
+                  onChange={(e) => setWithdrawalMemberId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
+                  required
+                >
+                  <option value="">בחר/י חבר צוות...</option>
+                  {members.map(m => (
+                    <option key={m.id} value={m.id}>{m.avatar} {m.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">סכום המשיכה (₪):</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  value={withdrawalAmount}
+                  onChange={(e) => setWithdrawalAmount(e.target.value)}
+                  placeholder="280.00"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">עבור מה המשיכה?</label>
+                <input
+                  type="text"
+                  value={withdrawalReason}
+                  onChange={(e) => setWithdrawalReason(e.target.value)}
+                  placeholder="למשל: החזר קנייה במחסני השוק"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddWithdrawalModal(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  ביטול
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-bold bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700"
+                >
+                  אשר משיכה
                 </button>
               </div>
             </form>

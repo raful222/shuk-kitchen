@@ -19,6 +19,7 @@ import {
   INITIAL_PRODUCTS,
   INITIAL_EXPENSES,
   INITIAL_FUND_DEPOSITS,
+  INITIAL_WITHDRAWALS,
   INITIAL_DAILY_MENU,
   INITIAL_PAYBOX_LINK,
   DAYS_OF_WEEK,
@@ -53,6 +54,7 @@ export default function App() {
   const [products, setProducts] = useState(() => getStored('shuk_products_clean', INITIAL_PRODUCTS));
   const [expenses, setExpenses] = useState(() => getStored('shuk_expenses_clean', INITIAL_EXPENSES));
   const [deposits, setDeposits] = useState(() => getStored('shuk_deposits_clean', INITIAL_FUND_DEPOSITS));
+  const [withdrawals, setWithdrawals] = useState(() => getStored('shuk_withdrawals_clean', INITIAL_WITHDRAWALS));
   const [dailyMenu, setDailyMenu] = useState(() => getStored('shuk_daily_menu_clean', INITIAL_DAILY_MENU));
   const [swapRequests, setSwapRequests] = useState(() => getStored('shuk_swap_requests_clean', INITIAL_SWAP_REQUESTS));
   const [payboxLink, setPayboxLink] = useState(() => getStored('shuk_paybox_link', INITIAL_PAYBOX_LINK));
@@ -70,6 +72,7 @@ export default function App() {
   useEffect(() => { setStored('shuk_products_clean', products); }, [products]);
   useEffect(() => { setStored('shuk_expenses_clean', expenses); }, [expenses]);
   useEffect(() => { setStored('shuk_deposits_clean', deposits); }, [deposits]);
+  useEffect(() => { setStored('shuk_withdrawals_clean', withdrawals); }, [withdrawals]);
   useEffect(() => { setStored('shuk_daily_menu_clean', dailyMenu); }, [dailyMenu]);
   useEffect(() => { setStored('shuk_swap_requests_clean', swapRequests); }, [swapRequests]);
   useEffect(() => { setStored('shuk_paybox_link', payboxLink); }, [payboxLink]);
@@ -89,6 +92,7 @@ export default function App() {
       if (cloudState.products) setProducts(cloudState.products);
       if (cloudState.expenses) setExpenses(cloudState.expenses);
       if (cloudState.deposits) setDeposits(cloudState.deposits);
+      if (Array.isArray(cloudState.withdrawals)) setWithdrawals(cloudState.withdrawals);
       if (cloudState.dailyMenu) setDailyMenu(cloudState.dailyMenu);
       if (cloudState.swapRequests) setSwapRequests(cloudState.swapRequests);
       if (cloudState.payboxLink) setPayboxLink(cloudState.payboxLink);
@@ -116,6 +120,7 @@ export default function App() {
       products,
       expenses,
       deposits,
+      withdrawals,
       dailyMenu,
       swapRequests,
       payboxLink,
@@ -310,6 +315,12 @@ export default function App() {
     broadcastToCloud({ deposits: updatedDeposits });
   };
 
+  const handleAddWithdrawal = (newWithdrawal) => {
+    const updatedWithdrawals = [newWithdrawal, ...withdrawals];
+    setWithdrawals(updatedWithdrawals);
+    broadcastToCloud({ withdrawals: updatedWithdrawals });
+  };
+
   const handleToggleMemberPayment = (memberId, hasPaid) => {
     const updatedMembers = members.map(m => {
       if (m.id !== memberId) return m;
@@ -353,6 +364,7 @@ export default function App() {
     setProducts(INITIAL_PRODUCTS);
     setExpenses([]);
     setDeposits([]);
+    setWithdrawals([]);
     setDailyMenu(INITIAL_DAILY_MENU);
     setSwapRequests([]);
     setPayboxLink(INITIAL_PAYBOX_LINK);
@@ -361,6 +373,7 @@ export default function App() {
       pairs: [],
       expenses: [],
       deposits: [],
+      withdrawals: [],
       swapRequests: [],
       products: INITIAL_PRODUCTS,
     });
@@ -376,6 +389,7 @@ export default function App() {
       products,
       expenses,
       deposits,
+      withdrawals,
       dailyMenu,
       swapRequests,
       payboxLink,
@@ -399,6 +413,7 @@ export default function App() {
     if (data.products) setProducts(data.products);
     if (data.expenses) setExpenses(data.expenses);
     if (data.deposits) setDeposits(data.deposits);
+    if (Array.isArray(data.withdrawals)) setWithdrawals(data.withdrawals);
     if (data.dailyMenu) setDailyMenu(data.dailyMenu);
     if (data.swapRequests) setSwapRequests(data.swapRequests);
     if (data.payboxLink) setPayboxLink(data.payboxLink);
@@ -462,10 +477,12 @@ export default function App() {
           <BudgetTab
             expenses={expenses}
             deposits={deposits}
+            withdrawals={withdrawals}
             members={members}
             payboxLink={payboxLink}
             onAddExpense={handleAddExpense}
             onAddDeposit={handleAddDeposit}
+            onAddWithdrawal={handleAddWithdrawal}
             onToggleMemberPayment={handleToggleMemberPayment}
             onUpdatePayboxLink={setPayboxLink}
             onOpenSettings={() => setActiveTab('settings')}

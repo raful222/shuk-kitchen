@@ -13,13 +13,50 @@ export const getCurrentDayKey = () => {
   }
 };
 
-export const getHebrewDateString = () => {
-  const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+export const getHebrewDateString = (dateObj = new Date()) => {
+  const options = { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric' };
   try {
-    return new Intl.DateTimeFormat('he-IL', options).format(new Date());
+    return new Intl.DateTimeFormat('he-IL', options).format(dateObj);
   } catch {
     return 'היום';
   }
+};
+
+/**
+ * Returns formatted calendar dates (DD/MM) for the current workweek:
+ * Sunday through Thursday.
+ * On Friday/Saturday, if offset is 0, it automatically previews the upcoming week.
+ */
+export const getWorkWeekDates = (weekOffset = 0) => {
+  const now = new Date();
+  const currentDay = now.getDay(); // 0 is Sunday, 5 is Friday, 6 is Saturday
+  
+  // On Friday or Saturday, if weekOffset is 0, default to upcoming week
+  const autoOffset = (weekOffset === 0 && currentDay >= 5) ? 1 : weekOffset;
+
+  // Calculate Sunday of target week
+  const sunday = new Date(now);
+  sunday.setDate(now.getDate() - currentDay + (autoOffset * 7));
+
+  const daysKeys = ['sun', 'mon', 'tue', 'wed', 'thu'];
+  const weekMap = {};
+
+  daysKeys.forEach((key, index) => {
+    const d = new Date(sunday);
+    d.setDate(sunday.getDate() + index);
+    
+    const dayNum = String(d.getDate()).padStart(2, '0');
+    const monthNum = String(d.getMonth() + 1).padStart(2, '0');
+    
+    weekMap[key] = {
+      dateFormatted: `${dayNum}.${monthNum}`,
+      fullDate: d.toISOString().split('T')[0],
+      dayName: ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי'][index],
+      isToday: d.toDateString() === now.toDateString(),
+    };
+  });
+
+  return weekMap;
 };
 
 export const validateMemberAttendance = (daysObj = {}) => {
@@ -124,6 +161,74 @@ export const generateWhatsAppShoppingList = (products = [], dailyMenu = {}, atte
   message += `\nנשלח מאפליקציית מטבח העבודה 📱`;
 
   return message;
+};
+
+/**
+ * Generates WhatsApp summary of balances and debts for PayBox
+ */
+export const generateWhatsAppDebtSummary = (arg1 = [], arg2 = {}, arg3 = '', arg4 = 0) => {
+  let members = [];
+  let memberBalances = {};
+  let payboxLink = '';
+  let fundBalance = 0;
+  let unpaidMembers = [];
+  let reimbursementsDue = [];
+
+  if (arg1 && typeof arg1 === 'object' && !Array.isArray(arg1)) {
+    members = arg1.members || [];
+    memberBalances = arg1.memberBalances || {};
+    payboxLink = arg1.payboxLink || '';
+    fundBalance = arg1.fundBalance || 0;
+    unpaidMembers = arg1.unpaidMembers || members.filter(m => !m.paidThisMonth);
+    reimbursementsDue = arg1.reimbursementsDue || [];
+  } else {
+    members = arg1 || [];
+    memberBalances = arg2 || {};
+    payboxLink = arg3 || '';
+    fundBalance = arg4 || 0;
+    unpaidMembers = members.filter(m => !m.paidThisMonth);
+  }
+
+  let msg = `💰 *תמונת מצב קופת אוכל ו-PayBox*\n`;
+  msg += `📅 תאריך: ${new Intl.DateTimeFormat('he-IL').format(new Date())}\n`;
+  msg += `💵 יתרת קופה מחושבת: *${Math.round(fundBalance)} ₪*\n`;
+  msg += `\n━━━━━━━━━━━━━━━━━\n`;
+
+  // 1. Debtors (need to deposit to PayBox)
+  if (unpaidMembers.length > 0) {
+    msg += `\n🔴 *חברים שטרם הפקידו החודש לקופה:*\n`;
+    unpaidMembers.forEach(m => {
+      const debtAmount = Math.abs(memberBalances[m.id] || 0);
+      msg += `▫️ ${m.name}${debtAmount > 0 ? ` (חוב: ${debtAmount} ₪)` : ''}\n`;
+    });
+  }
+
+  // 2. Creditors (paid out of pocket and owed refund from PayBox)
+  const creditors = reimbursementsDue.length > 0 
+    ? reimbursementsDue 
+    : members.filter(m => (memberBalances[m.id] || 0) > 0).map(m => ({
+        name: m.name,
+        amount: memberBalances[m.id] || 0,
+        reason: 'הוצאות קניות'
+      }));
+
+  if (creditors.length > 0) {
+    msg += `\n🟢 *חברים שמגיע להם החזר מפייבוקס (שילמו מכספם):*\n`;
+    creditors.forEach(item => {
+      msg += `▫️ ${item.name}: מגיע החזר של *${item.amount} ₪* (${item.reason || 'קניות'})\n`;
+    });
+  }
+
+  if (unpaidMembers.length === 0 && creditors.length === 0) {
+    msg += `\n✅ כל הכספים וההחזרים מאוזנים! אין חובות פעילים.\n`;
+  }
+
+  if (payboxLink) {
+    msg += `\n💳 *לתשלום ישיר בקבוצת ה-PayBox:* \n${payboxLink}\n`;
+  }
+
+  msg += `\nנשלח מאפליקציית מטבח העבודה 📱`;
+  return msg;
 };
 
 export const getStored = (key, fallback) => {

@@ -197,6 +197,7 @@ export const INITIAL_PRODUCTS = [
 
 export const INITIAL_EXPENSES = [];
 export const INITIAL_FUND_DEPOSITS = [];
+export const INITIAL_WITHDRAWALS = [];
 
 export const INITIAL_DAILY_MENU = {
   protein: 'chicken_breast',
