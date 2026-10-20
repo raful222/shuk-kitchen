@@ -1,4 +1,4 @@
-// Initial mock and default data for the workplace cooking & grocery management app
+// Clean Initial Data for Workplace Kitchen
 
 export const DEFAULT_FIREBASE_CONFIG = {
   apiKey: "AIzaSyDG_WrTGpvEOcj63x30zaoPt_Sxp0KIpI8",
@@ -11,13 +11,13 @@ export const DEFAULT_FIREBASE_CONFIG = {
 };
 
 export const INITIAL_MEMBERS = [
-  { id: 'm1', name: 'יוסי כהן', phone: '050-1234567', avatar: '👨‍🍳', color: 'from-amber-500 to-orange-600', paidThisMonth: true },
-  { id: 'm2', name: 'אבי לוי', phone: '052-2345678', avatar: '🍳', color: 'from-blue-500 to-indigo-600', paidThisMonth: true },
+  { id: 'm1', name: 'יוסי כהן', phone: '050-1234567', avatar: '👨‍🍳', color: 'from-amber-500 to-orange-600', paidThisMonth: false },
+  { id: 'm2', name: 'אבי לוי', phone: '052-2345678', avatar: '🍳', color: 'from-blue-500 to-indigo-600', paidThisMonth: false },
   { id: 'm3', name: 'רועי ששון', phone: '054-3456789', avatar: '🧑‍🍳', color: 'from-emerald-500 to-teal-600', paidThisMonth: false },
-  { id: 'm4', name: 'מתן עזרא', phone: '053-4567890', avatar: '🥗', color: 'from-purple-500 to-pink-600', paidThisMonth: true },
+  { id: 'm4', name: 'מתן עזרא', phone: '053-4567890', avatar: '🥗', color: 'from-purple-500 to-pink-600', paidThisMonth: false },
   { id: 'm5', name: 'דני גולן', phone: '058-5678901', avatar: '🍲', color: 'from-rose-500 to-red-600', paidThisMonth: false },
-  { id: 'm6', name: 'אלי מזרחי', phone: '050-6789012', avatar: '🍽️', color: 'from-cyan-500 to-blue-600', paidThisMonth: true },
-  { id: 'm7', name: 'שי אלון', phone: '052-7890123', avatar: '🔪', color: 'from-amber-600 to-yellow-600', paidThisMonth: true },
+  { id: 'm6', name: 'אלי מזרחי', phone: '050-6789012', avatar: '🍽️', color: 'from-cyan-500 to-blue-600', paidThisMonth: false },
+  { id: 'm7', name: 'שי אלון', phone: '052-7890123', avatar: '🔪', color: 'from-amber-600 to-yellow-600', paidThisMonth: false },
   { id: 'm8', name: 'תומר ברק', phone: '054-8901234', avatar: '🍗', color: 'from-green-600 to-emerald-700', paidThisMonth: false },
 ];
 
@@ -57,19 +57,8 @@ export const INITIAL_ATTENDANCE = {
 
 export const INITIAL_DAILY_OVERRIDE = {};
 
-export const INITIAL_SWAP_REQUESTS = [
-  {
-    id: 'swap-1',
-    dayKey: 'tue',
-    requestingMemberId: 'm5',
-    reason: 'יש לי בדיקה רפואית בבוקר ולא אספיק לבשל ולשטוף כלים',
-    status: 'open',
-    acceptedByMemberId: null,
-    createdAt: new Date().toISOString(),
-  }
-];
+export const INITIAL_SWAP_REQUESTS = [];
 
-// Recurring products from "מחסני השוק"
 export const INITIAL_PRODUCTS = [
   {
     id: 'prod-1',
@@ -78,8 +67,8 @@ export const INITIAL_PRODUCTS = [
     unit: 'פלטות',
     pricePerUnit: 32.90,
     requiredStock: 4,
-    currentStock: 1,
-    shukNote: 'פלטה ממוצעת שוקלת ~900 גרם (מספיקה לכ-3 אנשים)',
+    currentStock: 0,
+    shukNote: 'פלטה ממוצעת שוקלת ~900 גרם',
     link: 'https://www.mck.co.il',
   },
   {
@@ -100,7 +89,7 @@ export const INITIAL_PRODUCTS = [
     unit: 'חבילה',
     pricePerUnit: 9.90,
     requiredStock: 3,
-    currentStock: 2,
+    currentStock: 0,
     shukNote: 'בסיס מעולה לאורז קוקוס או לבן',
     link: 'https://www.mck.co.il',
   },
@@ -111,7 +100,7 @@ export const INITIAL_PRODUCTS = [
     unit: 'פחית',
     pricePerUnit: 8.90,
     requiredStock: 2,
-    currentStock: 1,
+    currentStock: 0,
     shukNote: 'מחסני השוק - לבישול אורז קוקוס עשיר',
     link: 'https://www.mck.co.il',
   },
@@ -133,7 +122,7 @@ export const INITIAL_PRODUCTS = [
     unit: 'חבילה',
     pricePerUnit: 6.90,
     requiredStock: 2,
-    currentStock: 1,
+    currentStock: 0,
     shukNote: 'אוסם או מותג מחסני השוק',
     link: 'https://www.mck.co.il',
   },
@@ -144,7 +133,7 @@ export const INITIAL_PRODUCTS = [
     unit: 'בקבוק',
     pricePerUnit: 11.90,
     requiredStock: 2,
-    currentStock: 1,
+    currentStock: 0,
     shukNote: 'שמן לבישול וטיגון',
     link: 'https://www.mck.co.il',
   },
@@ -155,7 +144,7 @@ export const INITIAL_PRODUCTS = [
     unit: 'בקבוק',
     pricePerUnit: 39.90,
     requiredStock: 1,
-    currentStock: 1,
+    currentStock: 0,
     shukNote: 'לתיבול סלטים',
     link: 'https://www.mck.co.il',
   },
@@ -166,7 +155,7 @@ export const INITIAL_PRODUCTS = [
     unit: 'יחידה',
     pricePerUnit: 8.50,
     requiredStock: 2,
-    currentStock: 2,
+    currentStock: 0,
     shukNote: 'תבלינים בסיסיים לעוף',
     link: 'https://www.mck.co.il',
   },
@@ -177,7 +166,7 @@ export const INITIAL_PRODUCTS = [
     unit: 'ק"ג',
     pricePerUnit: 4.90,
     requiredStock: 3,
-    currentStock: 1,
+    currentStock: 0,
     shukNote: 'לבסיס של כל תבשיל ובורגול',
     link: 'https://www.mck.co.il',
   },
@@ -199,7 +188,7 @@ export const INITIAL_PRODUCTS = [
     unit: 'ק"ג',
     pricePerUnit: 6.90,
     requiredStock: 4,
-    currentStock: 1,
+    currentStock: 0,
     shukNote: 'סלט טרי יומי',
     link: 'https://www.mck.co.il',
   },
@@ -210,7 +199,7 @@ export const INITIAL_PRODUCTS = [
     unit: 'בקבוק',
     pricePerUnit: 12.90,
     requiredStock: 2,
-    currentStock: 1,
+    currentStock: 0,
     shukNote: 'לשטיפת סירים וכלים אחרי הארוחה',
     link: 'https://www.mck.co.il',
   },
@@ -232,46 +221,21 @@ export const INITIAL_PRODUCTS = [
     unit: 'חבילה',
     pricePerUnit: 14.90,
     requiredStock: 2,
-    currentStock: 1,
+    currentStock: 0,
     shukNote: 'פינוי שוטף בסיום הארוחה',
     link: 'https://www.mck.co.il',
   },
 ];
 
-export const INITIAL_EXPENSES = [
-  {
-    id: 'exp-1',
-    date: '2026-10-18',
-    store: 'מחסני השוק - סניף ראשי',
-    description: 'קניית 4 פלטות חזה עוף + 2 פלטות פרגיות + אורז וקוקוס',
-    amount: 384.50,
-    paidBy: 'יוסי כהן',
-    receiptImage: null,
-  },
-  {
-    id: 'exp-2',
-    date: '2026-10-12',
-    store: 'מחסני השוק',
-    description: 'בורגול + ירקות טריים לסלט + נוזל כלים וסקוצ\'ים',
-    amount: 142.00,
-    paidBy: 'רועי ששון',
-    receiptImage: null,
-  },
-];
-
-export const INITIAL_FUND_DEPOSITS = [
-  { id: 'dep-1', memberId: 'm1', amount: 150, date: '2026-10-01' },
-  { id: 'dep-2', memberId: 'm2', amount: 150, date: '2026-10-01' },
-  { id: 'dep-3', memberId: 'm4', amount: 150, date: '2026-10-01' },
-  { id: 'dep-4', memberId: 'm6', amount: 150, date: '2026-10-01' },
-  { id: 'dep-5', memberId: 'm7', amount: 150, date: '2026-10-01' },
-];
+// Clean: 0 initial receipts and 0 deposits
+export const INITIAL_EXPENSES = [];
+export const INITIAL_FUND_DEPOSITS = [];
 
 export const INITIAL_DAILY_MENU = {
   protein: 'chicken_breast',
   portionsPerPlate: 3,
   side: 'אורז קוקוס עשיר',
-  notes: 'רועי מעדיף חזה עוף לא חריף, להשאיר קופסה לתומר',
+  notes: '',
 };
 
 export const INITIAL_PAYBOX_LINK = 'https://payboxapp.page.link/shuk-kitchen';
