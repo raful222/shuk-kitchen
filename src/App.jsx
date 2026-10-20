@@ -40,15 +40,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('today');
   const [currentDayKey, setCurrentDayKey] = useState(getCurrentDayKey());
 
-  // Cloud Config State - Default to the official project config!
-  const [firebaseConfig, setFirebaseConfig] = useState(() => {
-    const saved = getStored('shuk_firebase_config', null);
-    return saved && saved.projectId ? saved : DEFAULT_FIREBASE_CONFIG;
-  });
-  const [isCloudConnected, setIsCloudConnected] = useState(false);
+  // Cloud Config State - Works silently in background
+  const [firebaseConfig] = useState(DEFAULT_FIREBASE_CONFIG);
   const isRemoteUpdateRef = useRef(false);
 
-  // Persistent States - Initialize with clean state!
+  // Persistent States - Initialize with clean state
   const [members, setMembers] = useState(() => getStored('shuk_members_clean', INITIAL_MEMBERS));
   const [pairs, setPairs] = useState(() => getStored('shuk_pairs_clean', INITIAL_PAIRS));
   const [schedule, setSchedule] = useState(() => getStored('shuk_schedule_clean', INITIAL_SCHEDULE));
@@ -77,18 +73,13 @@ export default function App() {
   useEffect(() => { setStored('shuk_daily_menu_clean', dailyMenu); }, [dailyMenu]);
   useEffect(() => { setStored('shuk_swap_requests_clean', swapRequests); }, [swapRequests]);
   useEffect(() => { setStored('shuk_paybox_link', payboxLink); }, [payboxLink]);
-  useEffect(() => { setStored('shuk_firebase_config', firebaseConfig); }, [firebaseConfig]);
 
-  // Subscribe to cloud updates whenever firebaseConfig is available
+  // Subscribe to cloud updates silently in the background
   useEffect(() => {
-    if (!firebaseConfig) {
-      setIsCloudConnected(false);
-      return;
-    }
+    if (!firebaseConfig) return;
 
     const unsubscribe = subscribeToKitchenData(firebaseConfig, (cloudState) => {
       isRemoteUpdateRef.current = true;
-      setIsCloudConnected(true);
 
       if (Array.isArray(cloudState.members)) setMembers(cloudState.members);
       if (cloudState.pairs) setPairs(cloudState.pairs);
@@ -112,7 +103,7 @@ export default function App() {
     };
   }, [firebaseConfig]);
 
-  // Helper to broadcast state changes to Firebase
+  // Helper to broadcast state changes to Firebase silently
   const broadcastToCloud = (partialUpdates = {}) => {
     if (!firebaseConfig || isRemoteUpdateRef.current) return;
 
@@ -131,17 +122,8 @@ export default function App() {
       ...partialUpdates,
     };
 
-    syncKitchenDataToCloud(firebaseConfig, fullState).then((success) => {
-      setIsCloudConnected(success);
-    });
+    syncKitchenDataToCloud(firebaseConfig, fullState);
   };
-
-  // Initial push to cloud on first load if cloud document doesn't exist yet
-  useEffect(() => {
-    if (firebaseConfig) {
-      broadcastToCloud();
-    }
-  }, [firebaseConfig]);
 
   // Derived calculations
   const todayAttendees = members.filter(m => {
@@ -303,14 +285,6 @@ export default function App() {
     broadcastToCloud({ members: updatedMembers });
   };
 
-  // Handlers: Firebase Config
-  const handleSaveFirebaseConfig = (config) => {
-    setFirebaseConfig(config);
-    if (!config) {
-      setIsCloudConnected(false);
-    }
-  };
-
   // Reset & Backup
   const handleResetData = () => {
     localStorage.clear();
@@ -325,7 +299,6 @@ export default function App() {
     setDailyMenu(INITIAL_DAILY_MENU);
     setSwapRequests([]);
     setPayboxLink(INITIAL_PAYBOX_LINK);
-    setFirebaseConfig(DEFAULT_FIREBASE_CONFIG);
     broadcastToCloud({
       members: [],
       pairs: [],
@@ -349,7 +322,6 @@ export default function App() {
       dailyMenu,
       swapRequests,
       payboxLink,
-      firebaseConfig,
       exportedAt: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
@@ -373,7 +345,6 @@ export default function App() {
     if (data.dailyMenu) setDailyMenu(data.dailyMenu);
     if (data.swapRequests) setSwapRequests(data.swapRequests);
     if (data.payboxLink) setPayboxLink(data.payboxLink);
-    if (data.firebaseConfig) setFirebaseConfig(data.firebaseConfig);
     broadcastToCloud(data);
   };
 
@@ -386,8 +357,6 @@ export default function App() {
         activeSwapsCount={openSwapsCount}
         onOpenSwaps={() => handleOpenSwapModal(currentDayKey)}
         currentTab={activeTab}
-        isCloudConnected={isCloudConnected}
-        onOpenSettings={() => setActiveTab('settings')}
       />
 
       {/* Main Tab Views */}
@@ -451,9 +420,6 @@ export default function App() {
             pairs={pairs}
             payboxLink={payboxLink}
             onUpdatePayboxLink={setPayboxLink}
-            firebaseConfig={firebaseConfig}
-            onSaveFirebaseConfig={handleSaveFirebaseConfig}
-            isCloudConnected={isCloudConnected}
             onAddMember={handleAddMember}
             onRemoveMember={handleRemoveMember}
             onResetData={handleResetData}

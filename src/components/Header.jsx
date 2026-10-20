@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingBag, Users, AlertCircle, Utensils, Cloud, CloudCheck, CloudOff } from 'lucide-react';
+import { ShoppingBag, Users, AlertCircle, Utensils } from 'lucide-react';
 import { getHebrewDateString } from '../utils/helpers';
 
 export default function Header({ 
@@ -7,8 +7,6 @@ export default function Header({
   activeSwapsCount = 0, 
   onOpenSwaps,
   currentTab,
-  isCloudConnected = false,
-  onOpenSettings,
 }) {
   const hebrewDate = getHebrewDateString();
 
@@ -25,23 +23,7 @@ export default function Header({
                 <h1 className="font-extrabold text-lg tracking-tight">שוק-מטבח</h1>
                 <span className="text-[10px] bg-white/25 px-1.5 py-0.5 rounded-full font-medium">מחסני השוק</span>
               </div>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <p className="text-xs text-orange-100 font-medium">{hebrewDate}</p>
-                <span>•</span>
-                {/* Cloud Sync Status Badge */}
-                <button
-                  onClick={onOpenSettings}
-                  className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full flex items-center gap-1 transition ${
-                    isCloudConnected 
-                      ? 'bg-emerald-400/30 text-emerald-100 hover:bg-emerald-400/40' 
-                      : 'bg-white/20 text-orange-100 hover:bg-white/30'
-                  }`}
-                  title={isCloudConnected ? 'מסד נתונים מחובר ומסונכרן בזמן אמת לכל הצוות' : 'לחץ לחיבור מסד נתונים בענן'}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${isCloudConnected ? 'bg-emerald-300 animate-pulse' : 'bg-amber-300'}`} />
-                  <span>{isCloudConnected ? 'סנכרון חי' : 'מקומי'}</span>
-                </button>
-              </div>
+              <p className="text-xs text-orange-100 font-medium mt-0.5">{hebrewDate}</p>
             </div>
           </div>
 
