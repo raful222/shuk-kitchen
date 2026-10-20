@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Wallet, DollarSign, Plus, Receipt, TrendingUp, 
   ArrowUpRight, ArrowDownLeft, Check, Users, ExternalLink,
-  Camera, Image as ImageIcon, X, Send, AlertCircle
+  Camera, Image as ImageIcon, X, Send, AlertCircle, UserPlus
 } from 'lucide-react';
 
 export default function BudgetTab({
@@ -14,6 +14,7 @@ export default function BudgetTab({
   onAddDeposit,
   onToggleMemberPayment,
   onUpdatePayboxLink,
+  onOpenSettings,
 }) {
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
   const [showAddDepositModal, setShowAddDepositModal] = useState(false);
@@ -40,14 +41,13 @@ export default function BudgetTab({
   const unpaidMembers = members.filter(m => !m.paidThisMonth);
 
   // Approximate cost per meal
-  const estimatedMealsCount = members.length * 3 * 3;
+  const estimatedMealsCount = members.length > 0 ? (members.length * 3 * 3) : 0;
   const costPerMeal = estimatedMealsCount > 0 ? (totalExpenses / estimatedMealsCount).toFixed(1) : 0;
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Convert file to base64
     const reader = new FileReader();
     reader.onload = (event) => {
       setReceiptImage(event.target.result);
@@ -86,7 +86,6 @@ export default function BudgetTab({
       date: new Date().toISOString().split('T')[0],
     });
 
-    // Also mark member as paid
     onToggleMemberPayment(depositMemberId, true);
 
     setDepositAmount('');
@@ -213,7 +212,7 @@ export default function BudgetTab({
             </p>
           </div>
 
-          {unpaidMembers.length > 0 && (
+          {unpaidMembers.length > 0 && members.length > 0 && (
             <button
               onClick={handleSendUnpaidReminder}
               className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[11px] px-2.5 py-1.5 rounded-xl flex items-center gap-1 transition active:scale-95"
@@ -224,39 +223,52 @@ export default function BudgetTab({
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 pt-1">
-          {members.map(member => {
-            const hasPaid = !!member.paidThisMonth;
+        {members.length === 0 ? (
+          <div className="text-center py-4 space-y-2">
+            <p className="text-xs text-slate-500">עדיין לא הוגדרו חברי צוות למעקב תשלומים.</p>
+            <button
+              onClick={onOpenSettings}
+              className="text-xs font-bold text-orange-600 hover:text-orange-700 inline-flex items-center gap-1 bg-orange-50 px-3 py-1.5 rounded-xl border border-orange-200"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>הוסף חברי צוות בהגדרות</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            {members.map(member => {
+              const hasPaid = !!member.paidThisMonth;
 
-            return (
-              <button
-                key={member.id}
-                onClick={() => onToggleMemberPayment(member.id, !hasPaid)}
-                className={`p-2.5 rounded-2xl border text-right flex items-center justify-between transition-all ${
-                  hasPaid
-                    ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950 font-bold'
-                    : 'bg-rose-50/60 border-rose-200 text-rose-900 font-medium'
-                }`}
-              >
-                <div className="truncate">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <span className="text-sm shrink-0">{member.avatar}</span>
-                    <span className="text-xs truncate">{member.name}</span>
+              return (
+                <button
+                  key={member.id}
+                  onClick={() => onToggleMemberPayment(member.id, !hasPaid)}
+                  className={`p-2.5 rounded-2xl border text-right flex items-center justify-between transition-all ${
+                    hasPaid
+                      ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950 font-bold'
+                      : 'bg-rose-50/60 border-rose-200 text-rose-900 font-medium'
+                  }`}
+                >
+                  <div className="truncate">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="text-sm shrink-0">{member.avatar}</span>
+                      <span className="text-xs truncate">{member.name}</span>
+                    </div>
+                    <span className={`text-[10px] block mt-0.5 font-bold ${hasPaid ? 'text-emerald-700' : 'text-rose-600'}`}>
+                      {hasPaid ? 'שילם ✓' : 'טרם שילם ⏳'}
+                    </span>
                   </div>
-                  <span className={`text-[10px] block mt-0.5 font-bold ${hasPaid ? 'text-emerald-700' : 'text-rose-600'}`}>
-                    {hasPaid ? 'שילם ✓' : 'טרם שילם ⏳'}
-                  </span>
-                </div>
 
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0 ${
-                  hasPaid ? 'bg-emerald-600 text-white' : 'bg-rose-400 text-white'
-                }`}>
-                  {hasPaid ? '✓' : '✕'}
-                </div>
-              </button>
-            );
-          })}
-        </div>
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0 ${
+                    hasPaid ? 'bg-emerald-600 text-white' : 'bg-rose-400 text-white'
+                  }`}>
+                    {hasPaid ? '✓' : '✕'}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* 🧾 EXPENSES LIST (RECEIPTS & PHOTO UPLOADS) */}
@@ -269,52 +281,58 @@ export default function BudgetTab({
           <span className="text-xs text-slate-500 font-medium">{expenses.length} רכישות</span>
         </div>
 
-        <div className="space-y-2">
-          {expenses.map(expense => (
-            <div
-              key={expense.id}
-              className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2"
-            >
-              <div className="flex items-center gap-2.5">
-                {expense.receiptImage ? (
-                  <button
-                    onClick={() => setViewingReceiptImage(expense.receiptImage)}
-                    className="w-10 h-10 rounded-xl overflow-hidden border border-orange-300 shrink-0 relative group"
-                    title="לחץ לצפייה בקבלה"
-                  >
-                    <img
-                      src={expense.receiptImage}
-                      alt="קבלה"
-                      className="w-full h-full object-cover group-hover:scale-105 transition"
-                    />
-                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center text-white text-[10px]">
-                      🔍
+        {expenses.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-4 italic">
+            אין קבלות עדיין. לחץ למעלה על "הזנת קבלה + תמונה" כדי לתעד קנייה ראשונה.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {expenses.map(expense => (
+              <div
+                key={expense.id}
+                className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2"
+              >
+                <div className="flex items-center gap-2.5">
+                  {expense.receiptImage ? (
+                    <button
+                      onClick={() => setViewingReceiptImage(expense.receiptImage)}
+                      className="w-10 h-10 rounded-xl overflow-hidden border border-orange-300 shrink-0 relative group"
+                      title="לחץ לצפייה בקבלה"
+                    >
+                      <img
+                        src={expense.receiptImage}
+                        alt="קבלה"
+                        className="w-full h-full object-cover group-hover:scale-105 transition"
+                      />
+                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center text-white text-[10px]">
+                        🔍
+                      </div>
+                    </button>
+                  ) : (
+                    <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center text-base shrink-0">
+                      🧾
                     </div>
-                  </button>
-                ) : (
-                  <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center text-base shrink-0">
-                    🧾
-                  </div>
-                )}
+                  )}
 
-                <div>
-                  <h4 className="font-bold text-xs text-slate-800">{expense.description}</h4>
-                  <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
-                    <span className="font-semibold text-orange-700">{expense.store}</span>
-                    <span>•</span>
-                    <span>{expense.paidBy}</span>
-                    <span>•</span>
-                    <span>{expense.date}</span>
+                  <div>
+                    <h4 className="font-bold text-xs text-slate-800">{expense.description}</h4>
+                    <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
+                      <span className="font-semibold text-orange-700">{expense.store}</span>
+                      <span>•</span>
+                      <span>{expense.paidBy}</span>
+                      <span>•</span>
+                      <span>{expense.date}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <span className="font-black text-sm text-rose-600 shrink-0">
-                -{expense.amount} ₪
-              </span>
-            </div>
-          ))}
-        </div>
+                <span className="font-black text-sm text-rose-600 shrink-0">
+                  -{expense.amount} ₪
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 🖼️ VIEW RECEIPT IMAGE MODAL */}
@@ -337,7 +355,7 @@ export default function BudgetTab({
         </div>
       )}
 
-      {/* ➕ ADD EXPENSE MODAL (WITH CAMERA / PHOTO UPLOAD) */}
+      {/* ➕ ADD EXPENSE MODAL */}
       {showAddExpenseModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl">

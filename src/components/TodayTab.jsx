@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Sparkles, CheckCircle2, Circle, Phone, RefreshCw, 
   UtensilsCrossed, Scale, Flame, Users, AlertTriangle, 
-  ChevronDown, Check, MessageCircle, AlertCircle, Layers
+  ChevronDown, Check, MessageCircle, AlertCircle, Layers, UserPlus
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { DAYS_OF_WEEK } from '../data/initialData';
@@ -19,11 +19,12 @@ export default function TodayTab({
   dailyOverrides = {},
   onToggleDailyAttendance,
   weeklyAttendance = {},
+  onOpenSettings,
 }) {
   const currentDayObj = DAYS_OF_WEEK.find(d => d.key === currentDayKey) || DAYS_OF_WEEK[0];
   const daySchedule = schedule[currentDayKey] || { actualMembers: [], completed: false };
   
-  // Find the two assigned members for today
+  // Find the assigned members for today
   const assignedMemberIds = daySchedule.actualMembers || [];
   const assignedCooks = members.filter(m => assignedMemberIds.includes(m.id));
 
@@ -42,11 +43,8 @@ export default function TodayTab({
   const attendeeCount = attendees.length;
 
   // Smart Plate / Tray calculation:
-  // In Machsanei HaShuk, meat is sold in "plates" / "trays" (~850g-950g each).
-  // Default: ~3 servings per plate
   const portionsPerPlate = dailyMenu.portionsPerPlate || 3;
   const rawPlatesNeeded = attendeeCount > 0 ? (attendeeCount / portionsPerPlate) : 0;
-  // Round to nearest half plate: e.g. 2.3 -> 2.5
   const roundedPlates = Math.ceil(rawPlatesNeeded * 2) / 2;
   const approxKg = (roundedPlates * 0.9).toFixed(1);
 
@@ -77,6 +75,28 @@ export default function TodayTab({
 
   return (
     <div className="space-y-4 pb-20 pt-2 px-3 sm:px-4 max-w-md mx-auto">
+
+      {/* ⚠️ EMPTY MEMBERS BANNER */}
+      {members.length === 0 && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-3xl p-5 text-center space-y-3 shadow-sm">
+          <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto text-2xl font-bold">
+            👥
+          </div>
+          <div>
+            <h3 className="font-extrabold text-base text-slate-800">הצוות מאופס ונקי!</h3>
+            <p className="text-xs text-slate-600 mt-1">
+              עדיין לא הוספתם חברי צוות. הוסיפו את שמות העובדים בטאב "הגדרות" כדי להתחיל.
+            </p>
+          </div>
+          <button
+            onClick={onOpenSettings}
+            className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md transition active:scale-95 inline-flex items-center gap-1.5"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>הוסף חברי צוות עכשיו</span>
+          </button>
+        </div>
+      )}
 
       {/* ⚠️ ABSENT COOK ALERT */}
       {absentCooks.length > 0 && (
@@ -133,54 +153,62 @@ export default function TodayTab({
             </span>
           </div>
 
-          <button
-            onClick={() => onOpenSwapModal(currentDayKey)}
-            className="text-xs font-bold text-orange-700 hover:text-orange-900 flex items-center gap-1 bg-white/80 px-2.5 py-1 rounded-full border border-orange-200/80 shadow-xs"
-          >
-            <RefreshCw className="w-3 h-3" />
-            <span>בקש חילוף</span>
-          </button>
+          {members.length > 0 && (
+            <button
+              onClick={() => onOpenSwapModal(currentDayKey)}
+              className="text-xs font-bold text-orange-700 hover:text-orange-900 flex items-center gap-1 bg-white/80 px-2.5 py-1 rounded-full border border-orange-200/80 shadow-xs"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>בקש חילוף</span>
+            </button>
+          )}
         </div>
 
         <div className="text-center my-2">
           <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wider">
             צמד התורנים להיום (בישול + כלים)
           </h2>
-          <div className="mt-3 flex items-center justify-center gap-4">
-            {assignedCooks.map((cook, idx) => (
-              <div key={cook.id} className="flex flex-col items-center">
-                <div className="relative">
-                  <div className={`w-16 h-16 rounded-2xl bg-gradient-to-tr ${cook.color || 'from-orange-400 to-amber-500'} text-white text-3xl flex items-center justify-center shadow-md border-2 border-white`}>
-                    {cook.avatar || '👨‍🍳'}
+          {assignedCooks.length > 0 ? (
+            <div className="mt-3 flex items-center justify-center gap-4">
+              {assignedCooks.map((cook, idx) => (
+                <div key={cook.id} className="flex flex-col items-center">
+                  <div className="relative">
+                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-tr ${cook.color || 'from-orange-400 to-amber-500'} text-white text-3xl flex items-center justify-center shadow-md border-2 border-white`}>
+                      {cook.avatar || '👨‍🍳'}
+                    </div>
+                    <span className="absolute -bottom-1 -right-1 bg-slate-900 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                      {idx === 0 ? 'תורן 1' : 'תורן 2'}
+                    </span>
                   </div>
-                  <span className="absolute -bottom-1 -right-1 bg-slate-900 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full">
-                    {idx === 0 ? 'תורן 1' : 'תורן 2'}
-                  </span>
+                  <span className="font-extrabold text-sm text-slate-800 mt-2">{cook.name}</span>
+                  {cook.phone && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <a
+                        href={`tel:${cook.phone}`}
+                        className="p-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition"
+                        title="חייג"
+                      >
+                        <Phone className="w-3 h-3" />
+                      </a>
+                      <a
+                        href={`https://wa.me/972${cook.phone.replace(/[^0-9]/g, '').slice(-9)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-700 transition"
+                        title="וואטסאפ"
+                      >
+                        <MessageCircle className="w-3 h-3" />
+                      </a>
+                    </div>
+                  )}
                 </div>
-                <span className="font-extrabold text-sm text-slate-800 mt-2">{cook.name}</span>
-                {cook.phone && (
-                  <div className="flex items-center gap-1 mt-1">
-                    <a
-                      href={`tel:${cook.phone}`}
-                      className="p-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition"
-                      title="חייג"
-                    >
-                      <Phone className="w-3 h-3" />
-                    </a>
-                    <a
-                      href={`https://wa.me/972${cook.phone.replace(/[^0-9]/g, '').slice(-9)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-1 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-700 transition"
-                      title="וואטסאפ"
-                    >
-                      <MessageCircle className="w-3 h-3" />
-                    </a>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 mt-3 italic">
+              טרם שובצו תורנים ליום זה
+            </p>
+          )}
         </div>
 
         {/* Completion status toggle */}
@@ -328,61 +356,63 @@ export default function TodayTab({
       </div>
 
       {/* 👥 CARD: TODAY'S ATTENDANCE IN OFFICE */}
-      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/80 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
-              <Users className="w-4 h-4" />
+      {members.length > 0 && (
+        <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/80 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                <Users className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-800">נוכחות היום בעבודה</h3>
+                <p className="text-[11px] text-slate-500">לחץ לסימון הגעה או דיווח חיסור</p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-extrabold text-sm text-slate-800">נוכחות היום בעבודה</h3>
-              <p className="text-[11px] text-slate-500">לחץ לסימון הגעה או דיווח חיסור</p>
-            </div>
+            <span className="text-xs font-bold text-slate-600">
+              {attendeeCount} / {members.length}
+            </span>
           </div>
-          <span className="text-xs font-bold text-slate-600">
-            {attendeeCount} / {members.length}
-          </span>
-        </div>
 
-        <div className="grid grid-cols-2 gap-2 pt-1">
-          {members.map(member => {
-            const isAttending = getIsAttendingToday(member.id);
-            const isCookToday = assignedMemberIds.includes(member.id);
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            {members.map(member => {
+              const isAttending = getIsAttendingToday(member.id);
+              const isCookToday = assignedMemberIds.includes(member.id);
 
-            return (
-              <button
-                key={member.id}
-                onClick={() => onToggleDailyAttendance(member.id, !isAttending)}
-                className={`p-2.5 rounded-2xl border text-right flex items-center justify-between transition-all ${
-                  isAttending
-                    ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950 font-bold'
-                    : 'bg-slate-50 border-slate-200 text-slate-400 font-medium'
-                }`}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-base shrink-0">{member.avatar || '👤'}</span>
-                  <div className="truncate">
-                    <p className={`text-xs truncate ${isAttending ? 'font-bold' : 'line-through text-slate-400'}`}>
-                      {member.name}
-                    </p>
-                    {isCookToday && (
-                      <span className="inline-block text-[9px] bg-orange-100 text-orange-800 font-bold px-1.5 py-0.2 rounded-md">
-                        תורן היום 🍳
-                      </span>
-                    )}
+              return (
+                <button
+                  key={member.id}
+                  onClick={() => onToggleDailyAttendance(member.id, !isAttending)}
+                  className={`p-2.5 rounded-2xl border text-right flex items-center justify-between transition-all ${
+                    isAttending
+                      ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950 font-bold'
+                      : 'bg-slate-50 border-slate-200 text-slate-400 font-medium'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-base shrink-0">{member.avatar || '👤'}</span>
+                    <div className="truncate">
+                      <p className={`text-xs truncate ${isAttending ? 'font-bold' : 'line-through text-slate-400'}`}>
+                        {member.name}
+                      </p>
+                      {isCookToday && (
+                        <span className="inline-block text-[9px] bg-orange-100 text-orange-800 font-bold px-1.5 py-0.2 rounded-md">
+                          תורן היום 🍳
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0 ${
-                  isAttending ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-600'
-                }`}>
-                  {isAttending ? '✓' : '✕'}
-                </div>
-              </button>
-            );
-          })}
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0 ${
+                    isAttending ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-600'
+                  }`}>
+                    {isAttending ? '✓' : '✕'}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
     </div>
   );

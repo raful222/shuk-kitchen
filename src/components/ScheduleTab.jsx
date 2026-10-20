@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Calendar, CheckCircle, AlertTriangle, ShieldCheck, 
-  Users, RefreshCw, Info, Check, UserCheck 
+  Users, RefreshCw, Info, Check, UserCheck, UserPlus 
 } from 'lucide-react';
 import { DAYS_OF_WEEK } from '../data/initialData';
 import { validateMemberAttendance } from '../utils/helpers';
@@ -13,8 +13,9 @@ export default function ScheduleTab({
   onToggleMemberDay,
   onOpenSwapModal,
   pairs = [],
+  onOpenSettings,
 }) {
-  const [filterMode, setFilterMode] = useState('all'); // 'all' | 'needs_fix'
+  const [filterMode, setFilterMode] = useState('all');
 
   // Calculate total attendees for each day of the week
   const dayTotals = DAYS_OF_WEEK.reduce((acc, day) => {
@@ -100,13 +101,15 @@ export default function ScheduleTab({
                   </div>
                 </div>
 
-                <button
-                  onClick={() => onOpenSwapModal(day.key)}
-                  className="bg-slate-50 hover:bg-orange-50 border border-slate-200 hover:border-orange-200 p-2 rounded-xl text-slate-600 hover:text-orange-700 transition active:scale-95 shrink-0"
-                  title="בקש חילוף ליום זה"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
+                {assignedMembers.length > 0 && (
+                  <button
+                    onClick={() => onOpenSwapModal(day.key)}
+                    className="bg-slate-50 hover:bg-orange-50 border border-slate-200 hover:border-orange-200 p-2 rounded-xl text-slate-600 hover:text-orange-700 transition active:scale-95 shrink-0"
+                    title="בקש חילוף ליום זה"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             );
           })}
@@ -124,90 +127,105 @@ export default function ScheduleTab({
             <p className="text-[11px] text-slate-500">לחץ על יום כדי להדליק/לכבות נוכחות</p>
           </div>
 
-          <div className="flex items-center gap-1">
+          {members.length > 0 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setFilterMode('all')}
+                className={`text-[11px] px-2.5 py-1 rounded-xl font-bold transition ${
+                  filterMode === 'all'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                הכל
+              </button>
+              <button
+                onClick={() => setFilterMode('needs_fix')}
+                className={`text-[11px] px-2.5 py-1 rounded-xl font-bold transition ${
+                  filterMode === 'needs_fix'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                דורש תיקון
+              </button>
+            </div>
+          )}
+        </div>
+
+        {members.length === 0 ? (
+          <div className="text-center py-6 space-y-2">
+            <p className="text-xs text-slate-500">עדיין לא הוגדרו חברי צוות במערכת.</p>
             <button
-              onClick={() => setFilterMode('all')}
-              className={`text-[11px] px-2.5 py-1 rounded-xl font-bold transition ${
-                filterMode === 'all'
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 text-slate-600'
-              }`}
+              onClick={onOpenSettings}
+              className="text-xs font-bold text-orange-600 hover:text-orange-700 inline-flex items-center gap-1 bg-orange-50 px-3 py-1.5 rounded-xl border border-orange-200"
             >
-              הכל
-            </button>
-            <button
-              onClick={() => setFilterMode('needs_fix')}
-              className={`text-[11px] px-2.5 py-1 rounded-xl font-bold transition ${
-                filterMode === 'needs_fix'
-                  ? 'bg-red-600 text-white'
-                  : 'bg-slate-100 text-slate-600'
-              }`}
-            >
-              דורש תיקון
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>הוסף חברי צוות בהגדרות</span>
             </button>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-3 pt-1">
+            {members
+              .filter(member => {
+                if (filterMode === 'needs_fix') {
+                  const validation = validateMemberAttendance(weeklyAttendance[member.id] || {});
+                  return !validation.isValid;
+                }
+                return true;
+              })
+              .map(member => {
+                const memberDays = weeklyAttendance[member.id] || {};
+                const validation = validateMemberAttendance(memberDays);
 
-        <div className="space-y-3 pt-1">
-          {members
-            .filter(member => {
-              if (filterMode === 'needs_fix') {
-                const validation = validateMemberAttendance(weeklyAttendance[member.id] || {});
-                return !validation.isValid;
-              }
-              return true;
-            })
-            .map(member => {
-              const memberDays = weeklyAttendance[member.id] || {};
-              const validation = validateMemberAttendance(memberDays);
+                const badgeColors = {
+                  success: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+                  warning: 'bg-amber-100 text-amber-800 border-amber-200',
+                  error: 'bg-rose-100 text-rose-800 border-rose-200',
+                }[validation.statusType];
 
-              const badgeColors = {
-                success: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-                warning: 'bg-amber-100 text-amber-800 border-amber-200',
-                error: 'bg-rose-100 text-rose-800 border-rose-200',
-              }[validation.statusType];
+                return (
+                  <div key={member.id} className="p-3 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{member.avatar || '👤'}</span>
+                        <span className="font-extrabold text-xs text-slate-800">{member.name}</span>
+                      </div>
 
-              return (
-                <div key={member.id} className="p-3 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">{member.avatar || '👤'}</span>
-                      <span className="font-extrabold text-xs text-slate-800">{member.name}</span>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${badgeColors}`}>
+                        {validation.statusText}
+                      </span>
                     </div>
 
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${badgeColors}`}>
-                      {validation.statusText}
-                    </span>
-                  </div>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {DAYS_OF_WEEK.map(day => {
+                        const isSelected = !!memberDays[day.key];
 
-                  <div className="grid grid-cols-5 gap-1.5">
-                    {DAYS_OF_WEEK.map(day => {
-                      const isSelected = !!memberDays[day.key];
-
-                      return (
-                        <button
-                          key={day.key}
-                          onClick={() => onToggleMemberDay(member.id, day.key)}
-                          className={`py-1.5 px-1 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center relative ${
-                            isSelected
-                              ? 'bg-orange-600 text-white shadow-xs'
-                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
-                          }`}
-                        >
-                          <span>{day.short}׳</span>
-                          {day.mandatory && (
-                            <span className={`text-[8px] font-black ${isSelected ? 'text-orange-200' : 'text-orange-600'}`}>
-                              חובה
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
+                        return (
+                          <button
+                            key={day.key}
+                            onClick={() => onToggleMemberDay(member.id, day.key)}
+                            className={`py-1.5 px-1 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center relative ${
+                              isSelected
+                                ? 'bg-orange-600 text-white shadow-xs'
+                                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span>{day.short}׳</span>
+                            {day.mandatory && (
+                              <span className={`text-[8px] font-black ${isSelected ? 'text-orange-200' : 'text-orange-600'}`}>
+                                חובה
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-        </div>
+                );
+              })}
+          </div>
+        )}
       </div>
 
     </div>

@@ -48,17 +48,17 @@ export default function App() {
   const [isCloudConnected, setIsCloudConnected] = useState(false);
   const isRemoteUpdateRef = useRef(false);
 
-  // Persistent States
-  const [members, setMembers] = useState(() => getStored('shuk_members_v2', INITIAL_MEMBERS));
-  const [pairs, setPairs] = useState(() => getStored('shuk_pairs_v2', INITIAL_PAIRS));
-  const [schedule, setSchedule] = useState(() => getStored('shuk_schedule_v2', INITIAL_SCHEDULE));
-  const [weeklyAttendance, setWeeklyAttendance] = useState(() => getStored('shuk_weekly_att_v2', INITIAL_ATTENDANCE));
-  const [dailyOverrides, setDailyOverrides] = useState(() => getStored('shuk_daily_overrides_v2', INITIAL_DAILY_OVERRIDE));
-  const [products, setProducts] = useState(() => getStored('shuk_products_v2', INITIAL_PRODUCTS));
-  const [expenses, setExpenses] = useState(() => getStored('shuk_expenses_v2', INITIAL_EXPENSES));
-  const [deposits, setDeposits] = useState(() => getStored('shuk_deposits_v2', INITIAL_FUND_DEPOSITS));
-  const [dailyMenu, setDailyMenu] = useState(() => getStored('shuk_daily_menu_v2', INITIAL_DAILY_MENU));
-  const [swapRequests, setSwapRequests] = useState(() => getStored('shuk_swap_requests_v2', INITIAL_SWAP_REQUESTS));
+  // Persistent States - Initialize with clean state!
+  const [members, setMembers] = useState(() => getStored('shuk_members_clean', INITIAL_MEMBERS));
+  const [pairs, setPairs] = useState(() => getStored('shuk_pairs_clean', INITIAL_PAIRS));
+  const [schedule, setSchedule] = useState(() => getStored('shuk_schedule_clean', INITIAL_SCHEDULE));
+  const [weeklyAttendance, setWeeklyAttendance] = useState(() => getStored('shuk_weekly_att_clean', INITIAL_ATTENDANCE));
+  const [dailyOverrides, setDailyOverrides] = useState(() => getStored('shuk_daily_overrides_clean', INITIAL_DAILY_OVERRIDE));
+  const [products, setProducts] = useState(() => getStored('shuk_products_clean', INITIAL_PRODUCTS));
+  const [expenses, setExpenses] = useState(() => getStored('shuk_expenses_clean', INITIAL_EXPENSES));
+  const [deposits, setDeposits] = useState(() => getStored('shuk_deposits_clean', INITIAL_FUND_DEPOSITS));
+  const [dailyMenu, setDailyMenu] = useState(() => getStored('shuk_daily_menu_clean', INITIAL_DAILY_MENU));
+  const [swapRequests, setSwapRequests] = useState(() => getStored('shuk_swap_requests_clean', INITIAL_SWAP_REQUESTS));
   const [payboxLink, setPayboxLink] = useState(() => getStored('shuk_paybox_link', INITIAL_PAYBOX_LINK));
 
   // Swap modal state
@@ -66,16 +66,16 @@ export default function App() {
   const [swapModalTargetDay, setSwapModalTargetDay] = useState(currentDayKey);
 
   // Local storage caching
-  useEffect(() => { setStored('shuk_members_v2', members); }, [members]);
-  useEffect(() => { setStored('shuk_pairs_v2', pairs); }, [pairs]);
-  useEffect(() => { setStored('shuk_schedule_v2', schedule); }, [schedule]);
-  useEffect(() => { setStored('shuk_weekly_att_v2', weeklyAttendance); }, [weeklyAttendance]);
-  useEffect(() => { setStored('shuk_daily_overrides_v2', dailyOverrides); }, [dailyOverrides]);
-  useEffect(() => { setStored('shuk_products_v2', products); }, [products]);
-  useEffect(() => { setStored('shuk_expenses_v2', expenses); }, [expenses]);
-  useEffect(() => { setStored('shuk_deposits_v2', deposits); }, [deposits]);
-  useEffect(() => { setStored('shuk_daily_menu_v2', dailyMenu); }, [dailyMenu]);
-  useEffect(() => { setStored('shuk_swap_requests_v2', swapRequests); }, [swapRequests]);
+  useEffect(() => { setStored('shuk_members_clean', members); }, [members]);
+  useEffect(() => { setStored('shuk_pairs_clean', pairs); }, [pairs]);
+  useEffect(() => { setStored('shuk_schedule_clean', schedule); }, [schedule]);
+  useEffect(() => { setStored('shuk_weekly_att_clean', weeklyAttendance); }, [weeklyAttendance]);
+  useEffect(() => { setStored('shuk_daily_overrides_clean', dailyOverrides); }, [dailyOverrides]);
+  useEffect(() => { setStored('shuk_products_clean', products); }, [products]);
+  useEffect(() => { setStored('shuk_expenses_clean', expenses); }, [expenses]);
+  useEffect(() => { setStored('shuk_deposits_clean', deposits); }, [deposits]);
+  useEffect(() => { setStored('shuk_daily_menu_clean', dailyMenu); }, [dailyMenu]);
+  useEffect(() => { setStored('shuk_swap_requests_clean', swapRequests); }, [swapRequests]);
   useEffect(() => { setStored('shuk_paybox_link', payboxLink); }, [payboxLink]);
   useEffect(() => { setStored('shuk_firebase_config', firebaseConfig); }, [firebaseConfig]);
 
@@ -90,7 +90,7 @@ export default function App() {
       isRemoteUpdateRef.current = true;
       setIsCloudConnected(true);
 
-      if (cloudState.members) setMembers(cloudState.members);
+      if (Array.isArray(cloudState.members)) setMembers(cloudState.members);
       if (cloudState.pairs) setPairs(cloudState.pairs);
       if (cloudState.schedule) setSchedule(cloudState.schedule);
       if (cloudState.weeklyAttendance) setWeeklyAttendance(cloudState.weeklyAttendance);
@@ -139,7 +139,6 @@ export default function App() {
   // Initial push to cloud on first load if cloud document doesn't exist yet
   useEffect(() => {
     if (firebaseConfig) {
-      // Send initial snapshot so cloud document is populated
       broadcastToCloud();
     }
   }, [firebaseConfig]);
@@ -315,18 +314,26 @@ export default function App() {
   // Reset & Backup
   const handleResetData = () => {
     localStorage.clear();
-    setMembers(INITIAL_MEMBERS);
-    setPairs(INITIAL_PAIRS);
+    setMembers([]);
+    setPairs([]);
     setSchedule(INITIAL_SCHEDULE);
-    setWeeklyAttendance(INITIAL_ATTENDANCE);
+    setWeeklyAttendance({});
     setDailyOverrides({});
     setProducts(INITIAL_PRODUCTS);
-    setExpenses(INITIAL_EXPENSES);
-    setDeposits(INITIAL_FUND_DEPOSITS);
+    setExpenses([]);
+    setDeposits([]);
     setDailyMenu(INITIAL_DAILY_MENU);
-    setSwapRequests(INITIAL_SWAP_REQUESTS);
+    setSwapRequests([]);
     setPayboxLink(INITIAL_PAYBOX_LINK);
     setFirebaseConfig(DEFAULT_FIREBASE_CONFIG);
+    broadcastToCloud({
+      members: [],
+      pairs: [],
+      expenses: [],
+      deposits: [],
+      swapRequests: [],
+      products: INITIAL_PRODUCTS,
+    });
   };
 
   const handleExportData = () => {
@@ -355,7 +362,7 @@ export default function App() {
   };
 
   const handleImportData = (data) => {
-    if (data.members) setMembers(data.members);
+    if (Array.isArray(data.members)) setMembers(data.members);
     if (data.pairs) setPairs(data.pairs);
     if (data.schedule) setSchedule(data.schedule);
     if (data.weeklyAttendance) setWeeklyAttendance(data.weeklyAttendance);
@@ -398,6 +405,7 @@ export default function App() {
             dailyOverrides={dailyOverrides}
             onToggleDailyAttendance={handleToggleDailyAttendance}
             weeklyAttendance={weeklyAttendance}
+            onOpenSettings={() => setActiveTab('settings')}
           />
         )}
 
@@ -409,6 +417,7 @@ export default function App() {
             onToggleMemberDay={handleToggleMemberDay}
             onOpenSwapModal={handleOpenSwapModal}
             pairs={pairs}
+            onOpenSettings={() => setActiveTab('settings')}
           />
         )}
 
@@ -432,6 +441,7 @@ export default function App() {
             onAddDeposit={handleAddDeposit}
             onToggleMemberPayment={handleToggleMemberPayment}
             onUpdatePayboxLink={setPayboxLink}
+            onOpenSettings={() => setActiveTab('settings')}
           />
         )}
 
