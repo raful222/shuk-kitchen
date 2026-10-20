@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import TodayTab from './components/TodayTab';
@@ -29,10 +29,20 @@ import {
   setStored 
 } from './utils/helpers';
 
+import { 
+  subscribeToKitchenData, 
+  syncKitchenDataToCloud 
+} from './services/firebaseSync';
+
 export default function App() {
   // Navigation
   const [activeTab, setActiveTab] = useState('today');
   const [currentDayKey, setCurrentDayKey] = useState(getCurrentDayKey());
+
+  // Cloud Config State
+  const [firebaseConfig, setFirebaseConfig] = useState(() => getStored('shuk_firebase_config', null));
+  const [isCloudConnected, setIsCloudConnected] = useState(false);
+  const isRemoteUpdateRef = useRef(false);
 
   // Persistent States
   const [members, setMembers] = useState(() => getStored('shuk_members_v2', INITIAL_MEMBERS));
@@ -51,7 +61,7 @@ export default function App() {
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
   const [swapModalTargetDay, setSwapModalTargetDay] = useState(currentDayKey);
 
-  // Sync to localStorage
+  // Local storage caching
   useEffect(() => { setStored('shuk_members_v2', members); }, [members]);
   useEffect(() => { setStored('shuk_pairs_v2', pairs); }, [pairs]);
   useEffect(() => { setStored('shuk_schedule_v2', schedule); }, [schedule]);
@@ -63,6 +73,64 @@ export default function App() {
   useEffect(() => { setStored('shuk_daily_menu_v2', dailyMenu); }, [dailyMenu]);
   useEffect(() => { setStored('shuk_swap_requests_v2', swapRequests); }, [swapRequests]);
   useEffect(() => { setStored('shuk_paybox_link', payboxLink); }, [payboxLink]);
+  useEffect(() => { setStored('shuk_firebase_config', firebaseConfig); }, [firebaseConfig]);
+
+  // Subscribe to cloud updates whenever firebaseConfig is available
+  useEffect(() => {
+    if (!firebaseConfig) {
+      setIsCloudConnected(false);
+      return;
+    }
+
+    const unsubscribe = subscribeToKitchenData(firebaseConfig, (cloudState) => {
+      isRemoteUpdateRef.current = true;
+      setIsCloudConnected(true);
+
+      if (cloudState.members) setMembers(cloudState.members);
+      if (cloudState.pairs) setPairs(cloudState.pairs);
+      if (cloudState.schedule) setSchedule(cloudState.schedule);
+      if (cloudState.weeklyAttendance) setWeeklyAttendance(cloudState.weeklyAttendance);
+      if (cloudState.dailyOverrides) setDailyOverrides(cloudState.dailyOverrides);
+      if (cloudState.products) setProducts(cloudState.products);
+      if (cloudState.expenses) setExpenses(cloudState.expenses);
+      if (cloudState.deposits) setDeposits(cloudState.deposits);
+      if (cloudState.dailyMenu) setDailyMenu(cloudState.dailyMenu);
+      if (cloudState.swapRequests) setSwapRequests(cloudState.swapRequests);
+      if (cloudState.payboxLink) setPayboxLink(cloudState.payboxLink);
+
+      setTimeout(() => {
+        isRemoteUpdateRef.current = false;
+      }, 500);
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [firebaseConfig]);
+
+  // Helper to broadcast state changes to Firebase
+  const broadcastToCloud = (partialUpdates = {}) => {
+    if (!firebaseConfig || isRemoteUpdateRef.current) return;
+
+    const fullState = {
+      members,
+      pairs,
+      schedule,
+      weeklyAttendance,
+      dailyOverrides,
+      products,
+      expenses,
+      deposits,
+      dailyMenu,
+      swapRequests,
+      payboxLink,
+      ...partialUpdates,
+    };
+
+    syncKitchenDataToCloud(firebaseConfig, fullState).then((success) => {
+      setIsCloudConnected(success);
+    });
+  };
 
   // Derived calculations
   const todayAttendees = members.filter(m => {
@@ -90,108 +158,146 @@ export default function App() {
       acceptedByMemberId: null,
       createdAt: new Date().toISOString(),
     };
-    setSwapRequests(prev => [newSwap, ...prev]);
+    const updatedSwaps = [newSwap, ...swapRequests];
+    setSwapRequests(updatedSwaps);
+    broadcastToCloud({ swapRequests: updatedSwaps });
   };
 
   const handleAcceptSwap = (swapId, acceptingMemberId) => {
-    setSwapRequests(prev => prev.map(s => {
+    const updatedSwaps = swapRequests.map(s => {
       if (s.id !== swapId) return s;
       return { ...s, status: 'accepted', acceptedByMemberId };
-    }));
+    });
+    setSwapRequests(updatedSwaps);
 
     const targetSwap = swapRequests.find(s => s.id === swapId);
-    if (!targetSwap) return;
+    if (!targetSwap) {
+      broadcastToCloud({ swapRequests: updatedSwaps });
+      return;
+    }
 
-    setSchedule(prev => {
-      const daySchedule = prev[targetSwap.dayKey] || { actualMembers: [] };
-      const currentList = daySchedule.actualMembers || [];
-      const updatedList = currentList.map(id => id === targetSwap.requestingMemberId ? acceptingMemberId : id);
-      
-      if (!currentList.includes(targetSwap.requestingMemberId)) {
-        updatedList.push(acceptingMemberId);
+    const daySchedule = schedule[targetSwap.dayKey] || { actualMembers: [] };
+    const currentList = daySchedule.actualMembers || [];
+    const updatedList = currentList.map(id => id === targetSwap.requestingMemberId ? acceptingMemberId : id);
+    if (!currentList.includes(targetSwap.requestingMemberId)) {
+      updatedList.push(acceptingMemberId);
+    }
+
+    const updatedSchedule = {
+      ...schedule,
+      [targetSwap.dayKey]: {
+        ...daySchedule,
+        actualMembers: updatedList.slice(0, 2),
       }
+    };
 
-      return {
-        ...prev,
-        [targetSwap.dayKey]: {
-          ...daySchedule,
-          actualMembers: updatedList.slice(0, 2),
-        }
-      };
-    });
+    setSchedule(updatedSchedule);
+    broadcastToCloud({ swapRequests: updatedSwaps, schedule: updatedSchedule });
   };
 
   // Handlers: Schedule completion
   const handleToggleScheduleCompletion = (dayKey, isCompleted) => {
-    setSchedule(prev => ({
-      ...prev,
+    const updatedSchedule = {
+      ...schedule,
       [dayKey]: {
-        ...(prev[dayKey] || { actualMembers: [] }),
+        ...(schedule[dayKey] || { actualMembers: [] }),
         completed: isCompleted,
       }
-    }));
+    };
+    setSchedule(updatedSchedule);
+    broadcastToCloud({ schedule: updatedSchedule });
   };
 
   // Handlers: Attendance
   const handleToggleMemberDay = (memberId, dayKey) => {
-    setWeeklyAttendance(prev => {
-      const currentMemberDays = prev[memberId] || {};
-      return {
-        ...prev,
-        [memberId]: {
-          ...currentMemberDays,
-          [dayKey]: !currentMemberDays[dayKey],
-        }
-      };
-    });
+    const currentMemberDays = weeklyAttendance[memberId] || {};
+    const updatedAttendance = {
+      ...weeklyAttendance,
+      [memberId]: {
+        ...currentMemberDays,
+        [dayKey]: !currentMemberDays[dayKey],
+      }
+    };
+    setWeeklyAttendance(updatedAttendance);
+    broadcastToCloud({ weeklyAttendance: updatedAttendance });
   };
 
   const handleToggleDailyAttendance = (memberId, isAttending) => {
-    setDailyOverrides(prev => ({
-      ...prev,
+    const updatedOverrides = {
+      ...dailyOverrides,
       [memberId]: isAttending,
-    }));
+    };
+    setDailyOverrides(updatedOverrides);
+    broadcastToCloud({ dailyOverrides: updatedOverrides });
   };
 
   // Handlers: Groceries
   const handleUpdateStock = (productId, newStock) => {
-    setProducts(prev => prev.map(p => {
+    const updatedProducts = products.map(p => {
       if (p.id !== productId) return p;
       return { ...p, currentStock: Math.max(0, newStock) };
-    }));
+    });
+    setProducts(updatedProducts);
+    broadcastToCloud({ products: updatedProducts });
   };
 
   const handleAddProduct = (newProduct) => {
-    setProducts(prev => [newProduct, ...prev]);
+    const updatedProducts = [newProduct, ...products];
+    setProducts(updatedProducts);
+    broadcastToCloud({ products: updatedProducts });
   };
 
   // Handlers: Budget
   const handleAddExpense = (newExpense) => {
-    setExpenses(prev => [newExpense, ...prev]);
+    const updatedExpenses = [newExpense, ...expenses];
+    setExpenses(updatedExpenses);
+    broadcastToCloud({ expenses: updatedExpenses });
   };
 
   const handleAddDeposit = (newDeposit) => {
-    setDeposits(prev => [newDeposit, ...prev]);
+    const updatedDeposits = [newDeposit, ...deposits];
+    setDeposits(updatedDeposits);
+    broadcastToCloud({ deposits: updatedDeposits });
   };
 
   const handleToggleMemberPayment = (memberId, hasPaid) => {
-    setMembers(prev => prev.map(m => {
+    const updatedMembers = members.map(m => {
       if (m.id !== memberId) return m;
       return { ...m, paidThisMonth: hasPaid };
-    }));
+    });
+    setMembers(updatedMembers);
+    broadcastToCloud({ members: updatedMembers });
+  };
+
+  const handleUpdateDailyMenu = (newMenu) => {
+    setDailyMenu(newMenu);
+    broadcastToCloud({ dailyMenu: newMenu });
   };
 
   // Handlers: Members
   const handleAddMember = (newMember) => {
-    setMembers(prev => [...prev, newMember]);
-    setWeeklyAttendance(prev => ({
-      ...prev,
+    const updatedMembers = [...members, newMember];
+    setMembers(updatedMembers);
+    const updatedAttendance = {
+      ...weeklyAttendance,
       [newMember.id]: { sun: true, mon: false, tue: true, wed: true, thu: false }
-    }));
+    };
+    setWeeklyAttendance(updatedAttendance);
+    broadcastToCloud({ members: updatedMembers, weeklyAttendance: updatedAttendance });
   };
 
   const handleRemoveMember = (memberId) => {
-    setMembers(prev => prev.filter(m => m.id !== memberId));
+    const updatedMembers = members.filter(m => m.id !== memberId);
+    setMembers(updatedMembers);
+    broadcastToCloud({ members: updatedMembers });
+  };
+
+  // Handlers: Firebase Config
+  const handleSaveFirebaseConfig = (config) => {
+    setFirebaseConfig(config);
+    if (!config) {
+      setIsCloudConnected(false);
+    }
   };
 
   // Reset & Backup
@@ -208,6 +314,8 @@ export default function App() {
     setDailyMenu(INITIAL_DAILY_MENU);
     setSwapRequests(INITIAL_SWAP_REQUESTS);
     setPayboxLink(INITIAL_PAYBOX_LINK);
+    setFirebaseConfig(null);
+    setIsCloudConnected(false);
   };
 
   const handleExportData = () => {
@@ -246,6 +354,7 @@ export default function App() {
     if (data.dailyMenu) setDailyMenu(data.dailyMenu);
     if (data.swapRequests) setSwapRequests(data.swapRequests);
     if (data.payboxLink) setPayboxLink(data.payboxLink);
+    broadcastToCloud(data);
   };
 
   return (
@@ -257,6 +366,8 @@ export default function App() {
         activeSwapsCount={openSwapsCount}
         onOpenSwaps={() => handleOpenSwapModal(currentDayKey)}
         currentTab={activeTab}
+        isCloudConnected={isCloudConnected}
+        onOpenSettings={() => setActiveTab('settings')}
       />
 
       {/* Main Tab Views */}
@@ -267,7 +378,7 @@ export default function App() {
             members={members}
             schedule={schedule}
             dailyMenu={dailyMenu}
-            onUpdateDailyMenu={setDailyMenu}
+            onUpdateDailyMenu={handleUpdateDailyMenu}
             onToggleScheduleCompletion={handleToggleScheduleCompletion}
             onOpenSwapModal={handleOpenSwapModal}
             swapRequests={swapRequests}
@@ -317,6 +428,9 @@ export default function App() {
             pairs={pairs}
             payboxLink={payboxLink}
             onUpdatePayboxLink={setPayboxLink}
+            firebaseConfig={firebaseConfig}
+            onSaveFirebaseConfig={handleSaveFirebaseConfig}
+            isCloudConnected={isCloudConnected}
             onAddMember={handleAddMember}
             onRemoveMember={handleRemoveMember}
             onResetData={handleResetData}

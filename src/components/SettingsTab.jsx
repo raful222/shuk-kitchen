@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   Users, UserPlus, Trash2, Smartphone, Download, 
-  Upload, RotateCcw, Globe, Check, Shield, Info, Edit2, Link as LinkIcon 
+  Upload, RotateCcw, Globe, Check, Shield, Info, Edit2, Link as LinkIcon,
+  Database, Cloud, CloudCheck, Sparkles, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 export default function SettingsTab({
@@ -9,6 +10,9 @@ export default function SettingsTab({
   pairs = [],
   payboxLink = 'https://payboxapp.page.link/shuk-kitchen',
   onUpdatePayboxLink,
+  firebaseConfig = null,
+  onSaveFirebaseConfig,
+  isCloudConnected = false,
   onAddMember,
   onRemoveMember,
   onResetData,
@@ -20,6 +24,13 @@ export default function SettingsTab({
   const [newMemberAvatar, setNewMemberAvatar] = useState('👨‍🍳');
   const [payboxInput, setPayboxInput] = useState(payboxLink);
   const [payboxSaved, setPayboxSaved] = useState(false);
+
+  // Firebase Config State
+  const [firebaseInput, setFirebaseInput] = useState(
+    firebaseConfig ? JSON.stringify(firebaseConfig, null, 2) : ''
+  );
+  const [showFirebaseGuide, setShowFirebaseGuide] = useState(false);
+  const [firebaseStatusMsg, setFirebaseStatusMsg] = useState('');
 
   const avatarOptions = ['👨‍🍳', '🍳', '🧑‍🍳', '🥗', '🍲', '🍽️', '🔪', '🍗', '🥩', '🥙'];
 
@@ -47,6 +58,39 @@ export default function SettingsTab({
     setTimeout(() => setPayboxSaved(false), 2000);
   };
 
+  const handleSaveFirebase = (e) => {
+    e.preventDefault();
+    try {
+      if (!firebaseInput.trim()) {
+        onSaveFirebaseConfig(null);
+        setFirebaseStatusMsg('ההגדרות נמחקו - עבודה במצב מקומי.');
+        return;
+      }
+
+      // Try parsing JSON or JS object
+      let parsed;
+      try {
+        parsed = JSON.parse(firebaseInput);
+      } catch {
+        // Handle case where user pastes JS object without quotes around keys
+        const formatted = firebaseInput
+          .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":')
+          .replace(/'/g, '"');
+        parsed = JSON.parse(formatted);
+      }
+
+      if (!parsed.projectId) {
+        throw new Error('חסר projectId בהגדרות');
+      }
+
+      onSaveFirebaseConfig(parsed);
+      setFirebaseStatusMsg('הגדרות Firebase נשמרו בהצלחה! מתחבר לסנכרון חי...');
+      setTimeout(() => setFirebaseStatusMsg(''), 4000);
+    } catch (err) {
+      alert('פורמט ההגדרות אינו תקין. נא להדביק את ה-firebaseConfig המלא (JSON תקין).');
+    }
+  };
+
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -67,6 +111,84 @@ export default function SettingsTab({
   return (
     <div className="space-y-4 pb-20 pt-2 px-3 sm:px-4 max-w-md mx-auto">
       
+      {/* ☁️ CLOUD DATABASE (FIREBASE REAL-TIME SYNC) */}
+      <div className={`rounded-3xl p-5 shadow-sm border transition-all ${
+        isCloudConnected 
+          ? 'bg-gradient-to-br from-emerald-50 via-white to-teal-50 border-emerald-300' 
+          : 'bg-white border-slate-200/80'
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className={`w-9 h-9 rounded-2xl flex items-center justify-center font-bold ${
+              isCloudConnected ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'
+            }`}>
+              <Database className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-sm text-slate-800">סנכרון ענן בזמן אמת (Database)</h3>
+              <p className="text-[11px] text-slate-500">
+                {isCloudConnected 
+                  ? '🟢 מחובר לענן! כל עדכון מסתנכרן מיד לכל העובדים' 
+                  : '⚪ כרגע מקומי – חבר Firebase לעדכון שאר המכשירים'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSaveFirebase} className="mt-3 space-y-2.5">
+          <label className="block text-xs font-bold text-slate-700">
+            הדבק כאן את ה-Firebase Config שלך:
+          </label>
+          <textarea
+            rows="3"
+            value={firebaseInput}
+            onChange={(e) => setFirebaseInput(e.target.value)}
+            placeholder='{"apiKey": "...", "projectId": "shuk-...", ...}'
+            className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-[11px] font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
+          />
+
+          {firebaseStatusMsg && (
+            <p className="text-xs font-bold text-emerald-700 bg-emerald-50 p-2 rounded-xl border border-emerald-200">
+              {firebaseStatusMsg}
+            </p>
+          )}
+
+          <div className="flex items-center justify-between pt-1">
+            <button
+              type="button"
+              onClick={() => setShowFirebaseGuide(!showFirebaseGuide)}
+              className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+            >
+              <span>מדריך: איך פותחים Firebase ב-2 דקות?</span>
+              {showFirebaseGuide ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+
+            <button
+              type="submit"
+              className="bg-slate-900 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-xs hover:bg-slate-800 active:scale-95 transition"
+            >
+              שמור והתחבר
+            </button>
+          </div>
+        </form>
+
+        {/* Firebase Quick Setup Guide Accordion */}
+        {showFirebaseGuide && (
+          <div className="mt-3 p-3.5 bg-blue-50/80 rounded-2xl border border-blue-200 text-xs text-blue-950 space-y-2 leading-relaxed animate-in fade-in duration-200">
+            <h4 className="font-black text-blue-900">4 שלבים פשוטים (חינם לחלוטין):</h4>
+            <ol className="list-decimal list-inside space-y-1 text-[11px]">
+              <li>היכנסו ל-<strong>firebase.google.com</strong> עם חשבון גוגל ולחצו <em>Go to console</em>.</li>
+              <li>לחצו <strong>Add project</strong> ותנו לו שם (למשל: <code>shuk-kitchen</code>).</li>
+              <li>בתפריט צד בחרו <strong>Build ⬅️ Firestore Database</strong> ⬅️ לחצו <em>Create database</em> ובחרו <em>Start in test mode</em>.</li>
+              <li>בהגדרות הפרויקט (גלגל שיניים ⬅️ Project Settings) לחצו על אייקון <strong>Web (&lt;/&gt;)</strong>, העתיקו את ה-<code>firebaseConfig</code> והדביקו כאן למעלה!</li>
+            </ol>
+            <p className="text-[10px] text-blue-800 font-semibold pt-1">
+              * מעכשיו כל עדכון שמישהו יעשה (תשלום, קנייה, חילוף) יופיע מיד על המסך של כל שאר האנשים!
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* 💳 PAYBOX LINK SETTINGS */}
       <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/80 space-y-3">
         <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
@@ -201,17 +323,6 @@ export default function SettingsTab({
             </button>
           </div>
         </form>
-      </div>
-
-      {/* 🌐 HOSTING & DOMAIN GUIDE */}
-      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/80 space-y-2.5">
-        <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
-          <Globe className="w-4 h-4 text-blue-600" />
-          <span>העלאה לשרת ודומיין אישי</span>
-        </h3>
-        <p className="text-xs text-slate-600 leading-relaxed">
-          האתר מחובר למאגר ה-GitHub שלכם (<code className="bg-slate-100 px-1 rounded font-bold">raful222/shuk-kitchen</code>) עם צינור CI/CD מלא שמעדכן אוטומטית כל שינוי!
-        </p>
       </div>
 
       {/* 💾 BACKUP & DATA MANAGEMENT */}
