@@ -1,0 +1,50 @@
+import React from 'react';
+import { ShoppingBag, Users, AlertCircle, Utensils } from 'lucide-react';
+import { getHebrewDateString } from '../utils/helpers';
+
+export default function Header({ 
+  todayAttendeesCount = 0, 
+  activeSwapsCount = 0, 
+  onOpenSwaps,
+  currentTab
+}) {
+  const hebrewDate = getHebrewDateString();
+
+  return (
+    <header className="sticky top-0 z-30 bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 text-white shadow-md">
+      <div className="max-w-md mx-auto px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2 space-x-reverse">
+            <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner border border-white/20">
+              🍗
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h1 className="font-extrabold text-lg tracking-tight">שוק-מטבח</h1>
+                <span className="text-[10px] bg-white/25 px-1.5 py-0.5 rounded-full font-medium">מחסני השוק</span>
+              </div>
+              <p className="text-xs text-orange-100 font-medium">{hebrewDate}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {activeSwapsCount > 0 && (
+              <button
+                onClick={onOpenSwaps}
+                className="flex items-center gap-1 bg-amber-400 text-amber-950 text-xs font-bold px-2.5 py-1.5 rounded-full shadow-sm animate-pulse hover:bg-amber-300 transition"
+              >
+                <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                <span>{activeSwapsCount} חילוף</span>
+              </button>
+            )}
+
+            <div className="flex items-center gap-1 bg-black/20 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs font-semibold">
+              <Users className="w-3.5 h-3.5 text-orange-200" />
+              <span>{todayAttendeesCount} במשרד</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
