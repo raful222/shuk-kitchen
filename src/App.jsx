@@ -44,7 +44,7 @@ export default function App() {
   const [firebaseConfig] = useState(DEFAULT_FIREBASE_CONFIG);
   const isRemoteUpdateRef = useRef(false);
 
-  // Persistent States - Initialize with clean state
+  // Persistent States
   const [members, setMembers] = useState(() => getStored('shuk_members_clean', INITIAL_MEMBERS));
   const [pairs, setPairs] = useState(() => getStored('shuk_pairs_clean', INITIAL_PAIRS));
   const [schedule, setSchedule] = useState(() => getStored('shuk_schedule_clean', INITIAL_SCHEDULE));
@@ -82,7 +82,7 @@ export default function App() {
       isRemoteUpdateRef.current = true;
 
       if (Array.isArray(cloudState.members)) setMembers(cloudState.members);
-      if (cloudState.pairs) setPairs(cloudState.pairs);
+      if (Array.isArray(cloudState.pairs)) setPairs(cloudState.pairs);
       if (cloudState.schedule) setSchedule(cloudState.schedule);
       if (cloudState.weeklyAttendance) setWeeklyAttendance(cloudState.weeklyAttendance);
       if (cloudState.dailyOverrides) setDailyOverrides(cloudState.dailyOverrides);
@@ -224,6 +224,63 @@ export default function App() {
     broadcastToCloud({ dailyOverrides: updatedOverrides });
   };
 
+  // Handlers: Pairs & Auto Schedule Generation
+  const handleAddPair = (newPair) => {
+    const updatedPairs = [...pairs, newPair];
+    setPairs(updatedPairs);
+    broadcastToCloud({ pairs: updatedPairs });
+  };
+
+  const handleRemovePair = (pairId) => {
+    const updatedPairs = pairs.filter(p => p.id !== pairId);
+    setPairs(updatedPairs);
+    broadcastToCloud({ pairs: updatedPairs });
+  };
+
+  const handleAutoPairMembers = () => {
+    if (members.length < 2) return;
+    
+    // Shuffle members
+    const shuffled = [...members].sort(() => 0.5 - Math.random());
+    const newPairs = [];
+
+    for (let i = 0; i < shuffled.length; i += 2) {
+      if (i + 1 < shuffled.length) {
+        newPairs.push({
+          id: `pair-${Date.now()}-${i}`,
+          name: `צמד ${newPairs.length + 1} (${shuffled[i].name} & ${shuffled[i + 1].name})`,
+          memberIds: [shuffled[i].id, shuffled[i + 1].id],
+        });
+      } else if (newPairs.length > 0) {
+        // If odd number of members, attach last member to the last pair
+        newPairs[newPairs.length - 1].memberIds.push(shuffled[i].id);
+        newPairs[newPairs.length - 1].name += ` & ${shuffled[i].name}`;
+      }
+    }
+
+    setPairs(newPairs);
+    broadcastToCloud({ pairs: newPairs });
+  };
+
+  // Generates sequential schedule from pairs:
+  // Sunday -> Pair 1, Monday -> Pair 2, Tuesday -> Pair 3, Wednesday -> Pair 4, Thursday -> Pair 5 (or wraps around)
+  const handleAutoGenerateSchedule = () => {
+    if (pairs.length === 0) return;
+
+    const newSchedule = {};
+    DAYS_OF_WEEK.forEach((day, index) => {
+      const assignedPair = pairs[index % pairs.length];
+      newSchedule[day.key] = {
+        pairId: assignedPair.id,
+        actualMembers: [...assignedPair.memberIds].slice(0, 2),
+        completed: false,
+      };
+    });
+
+    setSchedule(newSchedule);
+    broadcastToCloud({ schedule: newSchedule });
+  };
+
   // Handlers: Groceries
   const handleUpdateStock = (productId, newStock) => {
     const updatedProducts = products.map(p => {
@@ -335,7 +392,7 @@ export default function App() {
 
   const handleImportData = (data) => {
     if (Array.isArray(data.members)) setMembers(data.members);
-    if (data.pairs) setPairs(data.pairs);
+    if (Array.isArray(data.pairs)) setPairs(data.pairs);
     if (data.schedule) setSchedule(data.schedule);
     if (data.weeklyAttendance) setWeeklyAttendance(data.weeklyAttendance);
     if (data.dailyOverrides) setDailyOverrides(data.dailyOverrides);
@@ -387,6 +444,7 @@ export default function App() {
             onOpenSwapModal={handleOpenSwapModal}
             pairs={pairs}
             onOpenSettings={() => setActiveTab('settings')}
+            onAutoGenerateSchedule={handleAutoGenerateSchedule}
           />
         )}
 
@@ -422,6 +480,10 @@ export default function App() {
             onUpdatePayboxLink={setPayboxLink}
             onAddMember={handleAddMember}
             onRemoveMember={handleRemoveMember}
+            onAddPair={handleAddPair}
+            onRemovePair={handleRemovePair}
+            onAutoPairMembers={handleAutoPairMembers}
+            onAutoGenerateSchedule={handleAutoGenerateSchedule}
             onResetData={handleResetData}
             onExportData={handleExportData}
             onImportData={handleImportData}

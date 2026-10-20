@@ -8,7 +8,7 @@ export const getCurrentDayKey = () => {
     case 2: return 'tue';
     case 3: return 'wed';
     case 4: return 'thu';
-    default: return 'sun'; // fallback for Friday/Saturday to Sunday
+    default: return 'sun';
   }
 };
 
@@ -22,42 +22,49 @@ export const getHebrewDateString = () => {
 };
 
 /**
- * Validates a member's 3-day weekly attendance rule:
- * - Must attend exactly 3 days.
- * - Sunday (sun) is mandatory.
- * - Tuesday (tue) is mandatory.
- * - Exactly 1 optional day from (mon, wed, thu).
+ * Validates a member's weekly attendance:
+ * - Ideally 3 days a week.
+ * - Sunday and Tuesday are standard work days, but members CAN be absent (sick, vacation, etc.).
+ * - Flexible and friendly feedback.
  */
 export const validateMemberAttendance = (daysObj = {}) => {
-  const sun = !!daysObj.sun;
-  const tue = !!daysObj.tue;
-  const optionalDays = [!!daysObj.mon, !!daysObj.wed, !!daysObj.thu].filter(Boolean).length;
   const totalDays = Object.values(daysObj).filter(Boolean).length;
-
-  const missingMandatory = [];
-  if (!sun) missingMandatory.push('ראשון');
-  if (!tue) missingMandatory.push('שלישי');
-
-  const isValid = sun && tue && totalDays === 3 && optionalDays === 1;
+  const isSunAbsent = !daysObj.sun;
+  const isTueAbsent = !daysObj.tue;
 
   let statusText = 'תקין (3 ימים)';
   let statusType = 'success'; // 'success' | 'warning' | 'error'
 
-  if (totalDays > 3) {
-    statusText = `יותר מדי ימים (${totalDays}/3)`;
-    statusType = 'error';
-  } else if (missingMandatory.length > 0) {
-    statusText = `חסר חובה: ${missingMandatory.join(', ')}`;
-    statusType = 'error';
-  } else if (totalDays < 3) {
-    statusText = `חסר יום בחירה (${totalDays}/3)`;
+  if (totalDays === 3) {
+    if (isSunAbsent && isTueAbsent) {
+      statusText = '3 ימים (נעדר מ-א׳ ו-ג׳)';
+      statusType = 'warning';
+    } else if (isSunAbsent) {
+      statusText = '3 ימים (נעדר מ-א׳)';
+      statusType = 'success';
+    } else if (isTueAbsent) {
+      statusText = '3 ימים (נעדר מ-ג׳)';
+      statusType = 'success';
+    } else {
+      statusText = 'תקין (3 ימים ✓)';
+      statusType = 'success';
+    }
+  } else if (totalDays > 3) {
+    statusText = `${totalDays}/3 ימים (חריגה)`;
+    statusType = 'warning';
+  } else if (totalDays === 0) {
+    statusText = 'טרם שובצו ימים';
+    statusType = 'warning';
+  } else {
+    statusText = `${totalDays}/3 ימים (חסר יום)`;
     statusType = 'warning';
   }
 
   return {
-    isValid,
+    isValid: totalDays === 3,
     totalDays,
-    missingMandatory,
+    isSunAbsent,
+    isTueAbsent,
     statusText,
     statusType,
   };
@@ -80,9 +87,8 @@ export const generateWhatsAppShoppingList = (products = [], dailyMenu = {}, atte
   }
   message += `\n━━━━━━━━━━━━━━━━━\n`;
 
-  // Group by category
   const categories = {
-    meat: '🍗 בשר ועופות',
+    meat: '🍗 בשר ועופות (פלטות)',
     dry: '🌾 יבשים ותוספות',
     veg: '🥗 ירקות ופירות',
     cleaning: '🧼 ניקיון וכלים',
@@ -106,13 +112,12 @@ export const generateWhatsAppShoppingList = (products = [], dailyMenu = {}, atte
     message += `💰 *עלות משוערת להזמנה:* ~${Math.round(totalEstimatedCost)} ₪\n`;
   }
 
-  message += `\n🍽️ *תפריט היום במטבח:* ${dailyMenu.protein === 'chicken_breast' ? 'חזה עוף' : dailyMenu.protein === 'pargiyot' ? 'פרגיות' : 'משולב'} + ${dailyMenu.side || 'תוספת'}\n`;
+  message += `\n🍽️ *תפריט היום במטבח:* ${dailyMenu.protein === 'chicken_breast' ? 'חזה עוף (פלטות)' : dailyMenu.protein === 'pargiyot' ? 'פרגיות (פלטות)' : 'משולב'} + ${dailyMenu.side || 'תוספת'}\n`;
   message += `\nנשלח מאפליקציית מטבח העבודה 📱`;
 
   return message;
 };
 
-// Safe storage access
 export const getStored = (key, fallback) => {
   try {
     const data = localStorage.getItem(key);
