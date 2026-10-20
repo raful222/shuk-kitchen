@@ -9,6 +9,7 @@ import SettingsTab from './components/SettingsTab';
 import SwapModal from './components/SwapModal';
 
 import {
+  DEFAULT_FIREBASE_CONFIG,
   INITIAL_MEMBERS,
   INITIAL_PAIRS,
   INITIAL_SCHEDULE,
@@ -39,8 +40,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('today');
   const [currentDayKey, setCurrentDayKey] = useState(getCurrentDayKey());
 
-  // Cloud Config State
-  const [firebaseConfig, setFirebaseConfig] = useState(() => getStored('shuk_firebase_config', null));
+  // Cloud Config State - Default to the official project config!
+  const [firebaseConfig, setFirebaseConfig] = useState(() => {
+    const saved = getStored('shuk_firebase_config', null);
+    return saved && saved.projectId ? saved : DEFAULT_FIREBASE_CONFIG;
+  });
   const [isCloudConnected, setIsCloudConnected] = useState(false);
   const isRemoteUpdateRef = useRef(false);
 
@@ -131,6 +135,14 @@ export default function App() {
       setIsCloudConnected(success);
     });
   };
+
+  // Initial push to cloud on first load if cloud document doesn't exist yet
+  useEffect(() => {
+    if (firebaseConfig) {
+      // Send initial snapshot so cloud document is populated
+      broadcastToCloud();
+    }
+  }, [firebaseConfig]);
 
   // Derived calculations
   const todayAttendees = members.filter(m => {
@@ -314,8 +326,7 @@ export default function App() {
     setDailyMenu(INITIAL_DAILY_MENU);
     setSwapRequests(INITIAL_SWAP_REQUESTS);
     setPayboxLink(INITIAL_PAYBOX_LINK);
-    setFirebaseConfig(null);
-    setIsCloudConnected(false);
+    setFirebaseConfig(DEFAULT_FIREBASE_CONFIG);
   };
 
   const handleExportData = () => {
@@ -331,6 +342,7 @@ export default function App() {
       dailyMenu,
       swapRequests,
       payboxLink,
+      firebaseConfig,
       exportedAt: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
@@ -354,6 +366,7 @@ export default function App() {
     if (data.dailyMenu) setDailyMenu(data.dailyMenu);
     if (data.swapRequests) setSwapRequests(data.swapRequests);
     if (data.payboxLink) setPayboxLink(data.payboxLink);
+    if (data.firebaseConfig) setFirebaseConfig(data.firebaseConfig);
     broadcastToCloud(data);
   };
 

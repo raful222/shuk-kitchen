@@ -1,5 +1,15 @@
 // Initial mock and default data for the workplace cooking & grocery management app
 
+export const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDG_WrTGpvEOcj63x30zaoPt_Sxp0KIpI8",
+  authDomain: "shuk-kitchen.firebaseapp.com",
+  projectId: "shuk-kitchen",
+  storageBucket: "shuk-kitchen.firebasestorage.app",
+  messagingSenderId: "847487034525",
+  appId: "1:847487034525:web:b1d0abe245f610c59ce074",
+  measurementId: "G-GCMHWNX61X"
+};
+
 export const INITIAL_MEMBERS = [
   { id: 'm1', name: 'יוסי כהן', phone: '050-1234567', avatar: '👨‍🍳', color: 'from-amber-500 to-orange-600', paidThisMonth: true },
   { id: 'm2', name: 'אבי לוי', phone: '052-2345678', avatar: '🍳', color: 'from-blue-500 to-indigo-600', paidThisMonth: true },
@@ -259,7 +269,7 @@ export const INITIAL_FUND_DEPOSITS = [
 
 export const INITIAL_DAILY_MENU = {
   protein: 'chicken_breast',
-  portionsPerPlate: 3, // ~3 servings per tray/plate
+  portionsPerPlate: 3,
   side: 'אורז קוקוס עשיר',
   notes: 'רועי מעדיף חזה עוף לא חריף, להשאיר קופסה לתומר',
 };
