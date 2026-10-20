@@ -21,6 +21,7 @@ export default function TodayTab({
   onToggleDailyAttendance,
   weeklyAttendance = {},
   onOpenSettings,
+  onOpenSchedule,
 }) {
   const currentDayObj = DAYS_OF_WEEK.find(d => d.key === currentDayKey) || DAYS_OF_WEEK[0];
   const daySchedule = schedule[currentDayKey] || { actualMembers: [], completed: false };
@@ -483,6 +484,33 @@ export default function TodayTab({
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* 🔮 PEEK TO NEXT WEEK CARD (SUNDAY AFTER THAT) */}
+      {onOpenSchedule && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/90 rounded-3xl p-4 flex items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-xs">
+              🔮
+            </div>
+            <div>
+              <h4 className="font-extrabold text-xs text-slate-900">
+                רוצים לדעת מי התורן ביום ראשון הבא?
+              </h4>
+              <p className="text-[11px] text-slate-500">
+                הלו"ז של שבוע הבא פתוח לצפייה מראש כבר עכשיו
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => onOpenSchedule(1)}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3 py-2 rounded-xl shadow-xs transition active:scale-95 shrink-0 flex items-center gap-1"
+          >
+            <span>לו"ז שבוע הבא</span>
+            <span>➔</span>
+          </button>
         </div>
       )}
 

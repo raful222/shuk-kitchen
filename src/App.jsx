@@ -40,6 +40,7 @@ export default function App() {
   // Navigation
   const [activeTab, setActiveTab] = useState('today');
   const [currentDayKey, setCurrentDayKey] = useState(getCurrentDayKey());
+  const [scheduleWeekOffset, setScheduleWeekOffset] = useState(0);
 
   // Cloud Config State - Works silently in background
   const [firebaseConfig] = useState(DEFAULT_FIREBASE_CONFIG);
@@ -447,6 +448,10 @@ export default function App() {
             onToggleDailyAttendance={handleToggleDailyAttendance}
             weeklyAttendance={weeklyAttendance}
             onOpenSettings={() => setActiveTab('settings')}
+            onOpenSchedule={(offset = 0) => {
+              setScheduleWeekOffset(offset);
+              setActiveTab('schedule');
+            }}
           />
         )}
 
@@ -460,6 +465,8 @@ export default function App() {
             pairs={pairs}
             onOpenSettings={() => setActiveTab('settings')}
             onAutoGenerateSchedule={handleAutoGenerateSchedule}
+            weekOffset={scheduleWeekOffset}
+            onChangeWeekOffset={setScheduleWeekOffset}
           />
         )}
 

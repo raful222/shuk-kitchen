@@ -17,11 +17,30 @@ export default function ScheduleTab({
   pairs = [],
   onOpenSettings,
   onAutoGenerateSchedule,
+  weekOffset: propWeekOffset = 0,
+  onChangeWeekOffset,
 }) {
   const [filterMode, setFilterMode] = useState('all');
+  const [selectedWeekOffset, setSelectedWeekOffset] = useState(propWeekOffset || 0);
 
-  // Exact dates for the workweek
-  const weekDates = getWorkWeekDates();
+  // Sync with prop if changed from outside
+  React.useEffect(() => {
+    if (propWeekOffset !== undefined) {
+      setSelectedWeekOffset(propWeekOffset);
+    }
+  }, [propWeekOffset]);
+
+  const handleWeekChange = (offset) => {
+    setSelectedWeekOffset(offset);
+    if (onChangeWeekOffset) {
+      onChangeWeekOffset(offset);
+    }
+  };
+
+  // Workweek dates: current week (0) vs next week (1)
+  const currentWeekDates = getWorkWeekDates(0);
+  const nextWeekDates = getWorkWeekDates(1);
+  const activeWeekDates = selectedWeekOffset === 1 ? nextWeekDates : currentWeekDates;
 
   // Calculate total attendees for each day of the week
   const dayTotals = DAYS_OF_WEEK.reduce((acc, day) => {
@@ -47,6 +66,64 @@ export default function ScheduleTab({
 
   return (
     <div className="space-y-4 pb-20 pt-2 px-3 sm:px-4 max-w-md mx-auto">
+
+      {/* 📅 WEEK NAVIGATION TOGGLE (CURRENT WEEK VS NEXT WEEK) */}
+      <div className="bg-white rounded-3xl p-2.5 border border-slate-200/90 shadow-sm space-y-2">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl">
+          <button
+            onClick={() => handleWeekChange(0)}
+            className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 ${
+              selectedWeekOffset === 0
+                ? 'bg-white text-slate-900 shadow-sm border border-slate-200/80'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <span>📅 השבוע הנוכחי</span>
+            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md ${
+              selectedWeekOffset === 0 ? 'bg-orange-100 text-orange-800' : 'bg-slate-200 text-slate-600'
+            }`}>
+              {currentWeekDates.sun?.dateFormatted} - {currentWeekDates.thu?.dateFormatted}
+            </span>
+          </button>
+
+          <button
+            onClick={() => handleWeekChange(1)}
+            className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 ${
+              selectedWeekOffset === 1
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <span>🔮 השבוע הבא</span>
+            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md ${
+              selectedWeekOffset === 1 ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+            }`}>
+              {nextWeekDates.sun?.dateFormatted} - {nextWeekDates.thu?.dateFormatted}
+            </span>
+          </button>
+        </div>
+
+        {selectedWeekOffset === 1 ? (
+          <div className="px-2.5 py-2 bg-blue-50/80 border border-blue-200 rounded-2xl text-[11px] text-blue-900 flex items-start gap-2">
+            <span className="text-base shrink-0 mt-0.5">👀</span>
+            <div className="leading-relaxed">
+              <strong className="block text-blue-950 font-black">צפייה מוקדמת בלו"ז שבוע הבא:</strong>
+              יום ראשון הבא ({nextWeekDates.sun?.dateFormatted}) פתוח לצפייה כבר עכשיו! הסבב ממשיך ברצף לפי הזוגות.
+            </div>
+          </div>
+        ) : (
+          <div className="px-2 py-1 text-[11px] text-slate-500 flex items-center justify-between">
+            <span>מציג את תורנויות השבוע הנוכחי</span>
+            <button
+              onClick={() => handleWeekChange(1)}
+              className="text-blue-600 font-bold hover:underline inline-flex items-center gap-0.5"
+            >
+              <span>רוצה לראות את יום ראשון הבא?</span>
+              <span>➔</span>
+            </button>
+          </div>
+        )}
+      </div>
       
       {/* 📌 FLEXIBLE ATTENDANCE RULES BANNER */}
       <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-3xl p-4 shadow-md space-y-2">
@@ -63,7 +140,7 @@ export default function ScheduleTab({
 
         <div className="grid grid-cols-5 gap-1 pt-1 text-center text-[10px]">
           {DAYS_OF_WEEK.map(d => {
-            const dateInfo = weekDates[d.key] || {};
+            const dateInfo = activeWeekDates[d.key] || {};
             const count = dayTotals[d.key] || 0;
             const hasDuty = count > 4;
 
@@ -71,19 +148,19 @@ export default function ScheduleTab({
               <div 
                 key={d.key} 
                 className={`py-1.5 px-0.5 rounded-xl transition ${
-                  dateInfo.isToday 
+                  dateInfo.isToday && selectedWeekOffset === 0
                     ? 'bg-amber-400 text-slate-900 font-black shadow-sm ring-2 ring-white/50' 
                     : 'bg-white/10 text-blue-100'
                 }`}
               >
                 <div className="font-extrabold text-[11px] leading-tight">{d.name}</div>
-                <div className={`text-[10px] ${dateInfo.isToday ? 'text-slate-900 font-bold' : 'text-blue-200'}`}>
+                <div className={`text-[10px] ${dateInfo.isToday && selectedWeekOffset === 0 ? 'text-slate-900 font-bold' : 'text-blue-200'}`}>
                   {dateInfo.dateFormatted}
                 </div>
-                <div className={`font-black text-[10px] mt-0.5 ${dateInfo.isToday ? 'text-slate-900' : hasDuty ? 'text-emerald-300' : 'text-amber-300'}`}>
+                <div className={`font-black text-[10px] mt-0.5 ${dateInfo.isToday && selectedWeekOffset === 0 ? 'text-slate-900' : hasDuty ? 'text-emerald-300' : 'text-amber-300'}`}>
                   {count} איש
                 </div>
-                <div className={`text-[8px] font-bold ${dateInfo.isToday ? 'text-slate-800' : hasDuty ? 'text-emerald-300' : 'text-slate-300'}`}>
+                <div className={`text-[8px] font-bold ${dateInfo.isToday && selectedWeekOffset === 0 ? 'text-slate-800' : hasDuty ? 'text-emerald-300' : 'text-slate-300'}`}>
                   {hasDuty ? 'תורנות' : 'אין תורנות'}
                 </div>
               </div>
@@ -119,7 +196,11 @@ export default function ScheduleTab({
         <div className="flex items-center justify-between px-1">
           <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
             <Calendar className="w-4 h-4 text-orange-600" />
-            <span>תורנויות השבוע (בישול + כלים)</span>
+            <span>
+              {selectedWeekOffset === 1 
+                ? `תורנויות השבוע הבא (${nextWeekDates.sun?.dateFormatted} - ${nextWeekDates.thu?.dateFormatted})` 
+                : 'תורנויות השבוע הנוכחי (בישול + כלים)'}
+            </span>
           </h3>
           <button
             onClick={onOpenSettings}
@@ -130,31 +211,64 @@ export default function ScheduleTab({
         </div>
 
         <div className="space-y-2.5">
-          {DAYS_OF_WEEK.map(day => {
-            const dayShift = schedule[day.key] || { actualMembers: [], completed: false };
-            const assignedMembers = members.filter(m => (dayShift.actualMembers || []).includes(m.id));
+          {DAYS_OF_WEEK.map((day, index) => {
+            const dateInfo = activeWeekDates[day.key] || {};
             const countForDay = dayTotals[day.key] || 0;
-            const dateInfo = weekDates[day.key] || {};
             const hasDuty = countForDay > 4;
+
+            let assignedMembers = [];
+            let isCompleted = false;
+
+            if (selectedWeekOffset === 1) {
+              // Next week: project shifts sequentially based on pairs (+5 index shift)
+              const assignedPair = pairs.length > 0 ? pairs[(index + 5) % pairs.length] : null;
+              assignedMembers = assignedPair ? members.filter(m => assignedPair.memberIds.includes(m.id)) : [];
+            } else {
+              // Current week
+              const dayShift = schedule[day.key] || { actualMembers: [], completed: false };
+              assignedMembers = members.filter(m => (dayShift.actualMembers || []).includes(m.id));
+              // Fallback to sequential pair if schedule wasn't explicitly generated yet
+              if (assignedMembers.length === 0 && pairs.length > 0) {
+                const assignedPair = pairs[index % pairs.length];
+                assignedMembers = assignedPair ? members.filter(m => assignedPair.memberIds.includes(m.id)) : [];
+              }
+              isCompleted = dayShift.completed;
+            }
 
             return (
               <div 
                 key={day.key}
                 className={`bg-white rounded-2xl p-3.5 border shadow-xs flex items-center justify-between gap-3 transition ${
-                  dateInfo.isToday ? 'border-orange-400 ring-2 ring-orange-200/50' : 'border-slate-200'
+                  dateInfo.isToday && selectedWeekOffset === 0 
+                    ? 'border-orange-400 ring-2 ring-orange-200/50' 
+                    : selectedWeekOffset === 1 
+                      ? 'border-blue-200/80' 
+                      : 'border-slate-200'
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-black shrink-0 ${
-                    dateInfo.isToday 
+                    dateInfo.isToday && selectedWeekOffset === 0 
                       ? 'bg-orange-600 text-white shadow-sm' 
-                      : 'bg-slate-100 text-slate-800'
+                      : selectedWeekOffset === 1
+                        ? 'bg-blue-50 text-blue-900 border border-blue-200'
+                        : 'bg-slate-100 text-slate-800'
                   }`}>
                     <span className="text-xs leading-none">יום {day.short}׳</span>
-                    <span className={`text-[10px] font-bold mt-0.5 ${dateInfo.isToday ? 'text-orange-100' : 'text-orange-600'}`}>
+                    <span className={`text-[10px] font-bold mt-0.5 ${
+                      dateInfo.isToday && selectedWeekOffset === 0 
+                        ? 'text-orange-100' 
+                        : selectedWeekOffset === 1 
+                          ? 'text-blue-700' 
+                          : 'text-orange-600'
+                    }`}>
                       {dateInfo.dateFormatted}
                     </span>
-                    <span className={`text-[9px] font-medium ${dateInfo.isToday ? 'text-white/80' : 'text-slate-500'}`}>
+                    <span className={`text-[9px] font-medium ${
+                      dateInfo.isToday && selectedWeekOffset === 0 
+                        ? 'text-white/80' 
+                        : 'text-slate-500'
+                    }`}>
                       {countForDay} איש
                     </span>
                   </div>
@@ -164,9 +278,14 @@ export default function ScheduleTab({
                       <span className="text-xs font-bold text-slate-800">
                         יום {day.name} ({dateInfo.dateFormatted})
                       </span>
-                      {dateInfo.isToday && (
+                      {dateInfo.isToday && selectedWeekOffset === 0 && (
                         <span className="text-[10px] bg-orange-100 text-orange-800 font-black px-1.5 py-0.2 rounded-md">
                           היום!
+                        </span>
+                      )}
+                      {selectedWeekOffset === 1 && (
+                        <span className="text-[9px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.2 rounded-md">
+                          שבוע הבא
                         </span>
                       )}
                     </div>
@@ -179,7 +298,7 @@ export default function ScheduleTab({
                               ? assignedMembers.map(m => m.name).join(' & ') 
                               : 'טרם שובץ זוג (לחץ "חולל לו"ז")'}
                           </span>
-                          {dayShift.completed && (
+                          {isCompleted && (
                             <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded-md">
                               הושלם ✓
                             </span>
@@ -187,7 +306,11 @@ export default function ScheduleTab({
                         </div>
                         <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
                           <span>{assignedMembers.map(m => m.avatar).join(' ')}</span>
-                          <span>אחראים על בישול וסיום שטיפת כלים</span>
+                          <span>
+                            {selectedWeekOffset === 1 
+                              ? 'סבב משובץ ברצף לשבוע הבא' 
+                              : 'אחראים על בישול וסיום שטיפת כלים'}
+                          </span>
                         </div>
                       </div>
                     ) : (
@@ -205,7 +328,7 @@ export default function ScheduleTab({
                   </div>
                 </div>
 
-                {hasDuty && assignedMembers.length > 0 && (
+                {hasDuty && assignedMembers.length > 0 && selectedWeekOffset === 0 && (
                   <button
                     onClick={() => onOpenSwapModal(day.key)}
                     className="bg-slate-50 hover:bg-orange-50 border border-slate-200 hover:border-orange-200 p-2 rounded-xl text-slate-600 hover:text-orange-700 transition active:scale-95 shrink-0"
