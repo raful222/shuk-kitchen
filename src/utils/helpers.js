@@ -1,7 +1,8 @@
 // Helper utilities for date, attendance validation, and WhatsApp cart generation
+import { SIDE_DISH_CONFIG } from '../data/initialData';
 
 export const getCurrentDayKey = () => {
-  const dayIndex = new Date().getDay(); // 0 is Sunday in JS
+  const dayIndex = new Date().getDay();
   switch (dayIndex) {
     case 0: return 'sun';
     case 1: return 'mon';
@@ -21,19 +22,13 @@ export const getHebrewDateString = () => {
   }
 };
 
-/**
- * Validates a member's weekly attendance:
- * - Ideally 3 days a week.
- * - Sunday and Tuesday are standard work days, but members CAN be absent (sick, vacation, etc.).
- * - Flexible and friendly feedback.
- */
 export const validateMemberAttendance = (daysObj = {}) => {
   const totalDays = Object.values(daysObj).filter(Boolean).length;
   const isSunAbsent = !daysObj.sun;
   const isTueAbsent = !daysObj.tue;
 
   let statusText = 'תקין (3 ימים)';
-  let statusType = 'success'; // 'success' | 'warning' | 'error'
+  let statusType = 'success';
 
   if (totalDays === 3) {
     if (isSunAbsent && isTueAbsent) {
@@ -70,15 +65,17 @@ export const validateMemberAttendance = (daysObj = {}) => {
   };
 };
 
-/**
- * Generates an organized WhatsApp message for the team or for placing an order at מחסני השוק
- */
 export const generateWhatsAppShoppingList = (products = [], dailyMenu = {}, attendeeCount = 0) => {
   const itemsToBuy = products.filter(p => (p.requiredStock - p.currentStock) > 0);
   const totalEstimatedCost = itemsToBuy.reduce((sum, p) => {
     const qty = Math.max(0, p.requiredStock - p.currentStock);
     return sum + (qty * p.pricePerUnit);
   }, 0);
+
+  const sideKey = dailyMenu.side || 'rice';
+  const sideConfig = SIDE_DISH_CONFIG[sideKey] || SIDE_DISH_CONFIG.rice;
+  const servingsPerPkg = dailyMenu.sideServingsPerPackage || sideConfig.servingsPerPackage || 4;
+  const packagesNeeded = Math.ceil((attendeeCount / servingsPerPkg) * 2) / 2;
 
   let message = `🛒 *רשימת קניות שבועית - מחסני השוק*\n`;
   message += `📅 תאריך: ${new Intl.DateTimeFormat('he-IL').format(new Date())}\n`;
@@ -89,7 +86,7 @@ export const generateWhatsAppShoppingList = (products = [], dailyMenu = {}, atte
 
   const categories = {
     meat: '🍗 בשר ועופות (פלטות)',
-    dry: '🌾 יבשים ותוספות',
+    dry: '🌾 יבשים ותוספות (חבילות)',
     veg: '🥗 ירקות ופירות',
     cleaning: '🧼 ניקיון וכלים',
   };
@@ -112,7 +109,18 @@ export const generateWhatsAppShoppingList = (products = [], dailyMenu = {}, atte
     message += `💰 *עלות משוערת להזמנה:* ~${Math.round(totalEstimatedCost)} ₪\n`;
   }
 
-  message += `\n🍽️ *תפריט היום במטבח:* ${dailyMenu.protein === 'chicken_breast' ? 'חזה עוף (פלטות)' : dailyMenu.protein === 'pargiyot' ? 'פרגיות (פלטות)' : 'משולב'} + ${dailyMenu.side || 'תוספת'}\n`;
+  const meatTitle = dailyMenu.protein === 'chicken_breast' 
+    ? 'חזה עוף (פלטות)' 
+    : dailyMenu.protein === 'pargiyot' 
+      ? 'פרגיות (פלטות)' 
+      : 'משולב חזה עוף ופרגיות';
+
+  message += `\n🍽️ *תפריט היום במטבח:*\n`;
+  message += `• עיקרית: ${meatTitle}\n`;
+  message += `• תוספת בצד: ${sideConfig.icon} ${sideConfig.label} (*${packagesNeeded} ${sideConfig.unit}*)\n`;
+  if (dailyMenu.extraNotes) {
+    message += `• הערות: ${dailyMenu.extraNotes}\n`;
+  }
   message += `\nנשלח מאפליקציית מטבח העבודה 📱`;
 
   return message;

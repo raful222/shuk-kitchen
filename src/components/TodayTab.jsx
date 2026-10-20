@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { 
   Sparkles, CheckCircle2, Circle, Phone, RefreshCw, 
   UtensilsCrossed, Scale, Flame, Users, AlertTriangle, 
-  ChevronDown, Check, MessageCircle, AlertCircle, Layers, UserPlus
+  ChevronDown, Check, MessageCircle, AlertCircle, Layers, UserPlus, Package
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { DAYS_OF_WEEK } from '../data/initialData';
+import { DAYS_OF_WEEK, SIDE_DISH_CONFIG } from '../data/initialData';
 
 export default function TodayTab({
   currentDayKey,
@@ -42,11 +42,19 @@ export default function TodayTab({
   const attendees = members.filter(m => getIsAttendingToday(m.id));
   const attendeeCount = attendees.length;
 
-  // Smart Plate / Tray calculation:
+  // 1. Meat Plate / Tray calculation:
   const portionsPerPlate = dailyMenu.portionsPerPlate || 3;
   const rawPlatesNeeded = attendeeCount > 0 ? (attendeeCount / portionsPerPlate) : 0;
   const roundedPlates = Math.ceil(rawPlatesNeeded * 2) / 2;
   const approxKg = (roundedPlates * 0.9).toFixed(1);
+
+  // 2. Side Dish Package calculation:
+  // Allowed side dishes: 'chips' | 'rice' | 'couscous' | 'bulgur'
+  const currentSideKey = dailyMenu.side || 'rice';
+  const currentSideConfig = SIDE_DISH_CONFIG[currentSideKey] || SIDE_DISH_CONFIG.rice;
+  const servingsPerPackage = dailyMenu.sideServingsPerPackage || currentSideConfig.servingsPerPackage || 4;
+  const rawPackagesNeeded = attendeeCount > 0 ? (attendeeCount / servingsPerPackage) : 0;
+  const roundedPackages = Math.ceil(rawPackagesNeeded * 2) / 2;
 
   // Check if any of today's cooks is absent
   const absentCooks = assignedCooks.filter(cook => !getIsAttendingToday(cook.id));
@@ -64,14 +72,14 @@ export default function TodayTab({
     }
   };
 
-  const sideDishOptions = [
-    '🥥 אורז קוקוס עשיר',
-    '🌾 בורגול עבה עם בצל',
-    'אורז לבן קלאסי',
-    'פתיתים אפויים',
-    'תפוחי אדמה בתנור',
-    'סלט ירקות ישראלי עשיר',
-  ];
+  const handleSelectSide = (sideId) => {
+    const config = SIDE_DISH_CONFIG[sideId] || SIDE_DISH_CONFIG.rice;
+    onUpdateDailyMenu({
+      ...dailyMenu,
+      side: sideId,
+      sideServingsPerPackage: config.servingsPerPackage,
+    });
+  };
 
   return (
     <div className="space-y-4 pb-20 pt-2 px-3 sm:px-4 max-w-md mx-auto">
@@ -149,7 +157,7 @@ export default function TodayTab({
               יום {currentDayObj.name}
             </span>
             <span className="text-xs font-bold text-slate-500">
-              {currentDayObj.mandatory ? 'חובת נוכחות' : 'יום בחירה'}
+              {attendeeCount} סועדים היום
             </span>
           </div>
 
@@ -236,16 +244,16 @@ export default function TodayTab({
         </div>
       </div>
 
-      {/* 🍗 CARD: WHAT ARE WE COOKING & TRAY/PLATE CALCULATOR */}
-      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/80 space-y-4">
-        <div className="flex items-center justify-between">
+      {/* 🍗 CARD: WHAT ARE WE COOKING & PORTION CALCULATORS */}
+      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/80 space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center font-bold">
               <UtensilsCrossed className="w-4 h-4" />
             </div>
             <div>
               <h3 className="font-extrabold text-sm text-slate-800">מה מבשלים היום?</h3>
-              <p className="text-[11px] text-slate-500">מחסני השוק: חישוב לפי פלטות בשר + תוספת</p>
+              <p className="text-[11px] text-slate-500">חישוב כמויות לפי פלטות בשר וחבילות תוספת</p>
             </div>
           </div>
           <span className="text-xs bg-slate-100 text-slate-700 font-bold px-2.5 py-1 rounded-full">
@@ -253,9 +261,9 @@ export default function TodayTab({
           </span>
         </div>
 
-        {/* Meat selection */}
-        <div>
-          <label className="block text-xs font-bold text-slate-600 mb-1.5">בחירת מנה עיקרית:</label>
+        {/* 1. MEAT SELECTION & TRAY CALCULATOR */}
+        <div className="space-y-2.5">
+          <label className="block text-xs font-bold text-slate-700">1. מנה עיקרית (חזה עוף / פרגיות):</label>
           <div className="grid grid-cols-3 gap-2">
             {[
               { id: 'chicken_breast', label: 'חזה עוף (פלטות)', icon: '🍗' },
@@ -276,82 +284,93 @@ export default function TodayTab({
               </button>
             ))}
           </div>
-        </div>
 
-        {/* Smart Plate / Tray Calculator Box */}
-        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-orange-200 rounded-2xl p-3.5 space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-bold text-slate-700 flex items-center gap-1">
-              <Layers className="w-3.5 h-3.5 text-orange-600" />
-              כמה פלטות להפשיר / לבשל?
-            </span>
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] text-slate-500">מנות לפלטה:</span>
-              {[2.5, 3, 3.5].map(ratio => (
-                <button
-                  key={ratio}
-                  onClick={() => onUpdateDailyMenu({ ...dailyMenu, portionsPerPlate: ratio })}
-                  className={`text-[10px] px-2 py-0.5 rounded-lg font-bold ${
-                    portionsPerPlate === ratio
-                      ? 'bg-orange-600 text-white'
-                      : 'bg-white text-slate-600 border border-slate-200'
-                  }`}
-                >
-                  {ratio}
-                </button>
-              ))}
+          {/* Meat Tray Result */}
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-orange-200 rounded-2xl p-3 flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs text-slate-700 font-semibold">
+              <Layers className="w-4 h-4 text-orange-600" />
+              <span>פלטות בשר להפשרה:</span>
             </div>
-          </div>
-
-          <div className="flex items-baseline justify-between pt-1">
-            <span className="text-xs text-slate-600">
-              {attendeeCount} סועדים במשרד
-            </span>
             <div className="text-left">
-              <span className="text-2xl font-black text-orange-700">{roundedPlates}</span>
+              <span className="text-xl font-black text-orange-700">{roundedPlates}</span>
               <span className="text-xs font-bold text-orange-700 mr-1">פלטות</span>
-              <span className="text-[11px] text-slate-500 mr-1.5">(~{approxKg} ק"ג)</span>
+              <span className="text-[10px] text-slate-500 mr-1">(~{approxKg} ק"ג)</span>
             </div>
           </div>
         </div>
 
-        {/* Side dish */}
-        <div>
-          <label className="block text-xs font-bold text-slate-600 mb-1.5">תוספת חמה / סלט:</label>
-          <div className="flex flex-wrap gap-1.5 mb-2">
-            {sideDishOptions.map(side => (
+        {/* 2. SIDE DISH SELECTION & PACKAGE CALCULATOR */}
+        <div className="space-y-2.5 pt-2 border-t border-slate-100">
+          <div className="flex items-center justify-between">
+            <label className="block text-xs font-bold text-slate-700">2. תוספת בצד (צ'יפס, אורז, קוסקוס, בורגול):</label>
+            <span className="text-[10px] text-slate-400">לפי חבילות / שקיות</span>
+          </div>
+
+          <div className="grid grid-cols-4 gap-1.5">
+            {Object.values(SIDE_DISH_CONFIG).map(side => (
               <button
-                key={side}
-                onClick={() => onUpdateDailyMenu({ ...dailyMenu, side })}
-                className={`text-xs px-2.5 py-1.5 rounded-xl border transition ${
-                  dailyMenu.side === side
-                    ? 'bg-slate-800 text-white border-slate-800 font-bold'
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                key={side.id}
+                onClick={() => handleSelectSide(side.id)}
+                className={`p-2 rounded-2xl border text-center transition-all ${
+                  currentSideKey === side.id
+                    ? 'border-slate-800 bg-slate-800 text-white font-extrabold shadow-sm scale-102'
+                    : 'border-slate-200 text-slate-700 hover:bg-slate-50 font-bold'
                 }`}
               >
-                {side}
+                <div className="text-xl">{side.icon}</div>
+                <div className="text-xs mt-1 leading-tight">{side.label}</div>
               </button>
             ))}
           </div>
-          <input
-            type="text"
-            value={dailyMenu.side || ''}
-            onChange={(e) => onUpdateDailyMenu({ ...dailyMenu, side: e.target.value })}
-            placeholder="או כתוב תוספת אחרת..."
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
-          />
-        </div>
 
-        {/* Notes */}
-        <div>
-          <label className="block text-xs font-bold text-slate-600 mb-1">הערות להיום (אלרגיות, בקשות):</label>
-          <input
-            type="text"
-            value={dailyMenu.notes || ''}
-            onChange={(e) => onUpdateDailyMenu({ ...dailyMenu, notes: e.target.value })}
-            placeholder="למשל: לא חריף, להשאיר קופסה למי שיגיע מאוחר..."
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
-          />
+          {/* Side Dish Package Result Box */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-3.5 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-blue-900 flex items-center gap-1.5">
+                <Package className="w-4 h-4 text-blue-600" />
+                <span>כמה {currentSideConfig.unit} {currentSideConfig.label} להכין?</span>
+              </span>
+
+              {/* Adjust ratio stepper */}
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-500">סועדים לחבילה:</span>
+                {[3, 4, 5, 6].map(num => (
+                  <button
+                    key={num}
+                    onClick={() => onUpdateDailyMenu({ ...dailyMenu, sideServingsPerPackage: num })}
+                    className={`text-[10px] w-5 h-5 rounded-md font-bold flex items-center justify-center ${
+                      servingsPerPackage === num
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-slate-600 border border-slate-200'
+                    }`}
+                  >
+                    {num}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-baseline justify-between pt-1">
+              <span className="text-xs text-slate-600">
+                {attendeeCount} סועדים × יחס של {servingsPerPackage} סועדים ל{currentSideConfig.unit === 'שקיות' ? 'שקית' : 'חבילה'}
+              </span>
+              <div className="text-left">
+                <span className="text-2xl font-black text-blue-700">{roundedPackages}</span>
+                <span className="text-xs font-bold text-blue-700 mr-1">{currentSideConfig.unit}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Additional note / extra side */}
+          <div>
+            <input
+              type="text"
+              value={dailyMenu.extraNotes || ''}
+              onChange={(e) => onUpdateDailyMenu({ ...dailyMenu, extraNotes: e.target.value })}
+              placeholder="הוספת תוספת נוספת או הערות (למשל: סלט ירקות גדול, לא חריף...)"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
         </div>
       </div>
 

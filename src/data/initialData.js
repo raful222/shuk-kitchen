@@ -10,16 +10,7 @@ export const DEFAULT_FIREBASE_CONFIG = {
   measurementId: "G-GCMHWNX61X"
 };
 
-export const INITIAL_MEMBERS = [
-  { id: 'm1', name: 'יוסי כהן', phone: '050-1234567', avatar: '👨‍🍳', color: 'from-amber-500 to-orange-600', paidThisMonth: false },
-  { id: 'm2', name: 'אבי לוי', phone: '052-2345678', avatar: '🍳', color: 'from-blue-500 to-indigo-600', paidThisMonth: false },
-  { id: 'm3', name: 'רועי ששון', phone: '054-3456789', avatar: '🧑‍🍳', color: 'from-emerald-500 to-teal-600', paidThisMonth: false },
-  { id: 'm4', name: 'מתן עזרא', phone: '053-4567890', avatar: '🥗', color: 'from-purple-500 to-pink-600', paidThisMonth: false },
-  { id: 'm5', name: 'דני גולן', phone: '058-5678901', avatar: '🍲', color: 'from-rose-500 to-red-600', paidThisMonth: false },
-  { id: 'm6', name: 'אלי מזרחי', phone: '050-6789012', avatar: '🍽️', color: 'from-cyan-500 to-blue-600', paidThisMonth: false },
-  { id: 'm7', name: 'שי אלון', phone: '052-7890123', avatar: '🔪', color: 'from-amber-600 to-yellow-600', paidThisMonth: false },
-  { id: 'm8', name: 'תומר ברק', phone: '054-8901234', avatar: '🍗', color: 'from-green-600 to-emerald-700', paidThisMonth: false },
-];
+export const INITIAL_MEMBERS = [];
 
 export const DAYS_OF_WEEK = [
   { key: 'sun', name: 'ראשון', mandatory: true, short: 'א' },
@@ -29,37 +20,33 @@ export const DAYS_OF_WEEK = [
   { key: 'thu', name: 'חמישי', mandatory: false, short: 'ה' },
 ];
 
-export const INITIAL_PAIRS = [
-  { id: 'p1', name: 'צמד א׳ (יוסי ואבי)', memberIds: ['m1', 'm2'] },
-  { id: 'p2', name: 'צמד ב׳ (רועי ומתן)', memberIds: ['m3', 'm4'] },
-  { id: 'p3', name: 'צמד ג׳ (דני ואלי)', memberIds: ['m5', 'm6'] },
-  { id: 'p4', name: 'צמד ד׳ (שי ותומר)', memberIds: ['m7', 'm8'] },
-];
+export const INITIAL_PAIRS = [];
 
 export const INITIAL_SCHEDULE = {
-  sun: { pairId: 'p1', actualMembers: ['m1', 'm2'], completed: false },
-  mon: { pairId: 'p2', actualMembers: ['m3', 'm4'], completed: false },
-  tue: { pairId: 'p3', actualMembers: ['m5', 'm6'], completed: false },
-  wed: { pairId: 'p4', actualMembers: ['m7', 'm8'], completed: false },
-  thu: { pairId: 'p1', actualMembers: ['m1', 'm2'], completed: false },
+  sun: { pairId: null, actualMembers: [], completed: false },
+  mon: { pairId: null, actualMembers: [], completed: false },
+  tue: { pairId: null, actualMembers: [], completed: false },
+  wed: { pairId: null, actualMembers: [], completed: false },
+  thu: { pairId: null, actualMembers: [], completed: false },
 };
 
-export const INITIAL_ATTENDANCE = {
-  m1: { sun: true, mon: true, tue: true, wed: false, thu: false },
-  m2: { sun: true, mon: true, tue: true, wed: false, thu: false },
-  m3: { sun: true, mon: false, tue: true, wed: true, thu: false },
-  m4: { sun: true, mon: false, tue: true, wed: true, thu: false },
-  m5: { sun: true, mon: false, tue: true, wed: false, thu: true },
-  m6: { sun: true, mon: false, tue: true, wed: false, thu: true },
-  m7: { sun: true, mon: true, tue: true, wed: false, thu: false },
-  m8: { sun: true, mon: false, tue: true, wed: true, thu: false },
-};
+export const INITIAL_ATTENDANCE = {};
 
 export const INITIAL_DAILY_OVERRIDE = {};
 
 export const INITIAL_SWAP_REQUESTS = [];
 
+// 4 Focused Side Dishes with package serving defaults:
+export const SIDE_DISH_CONFIG = {
+  chips: { id: 'chips', label: 'צ\'יפס', icon: '🍟', unit: 'שקיות', servingsPerPackage: 4, desc: 'שקית צ\'יפס קפוא לתנור / טיגון' },
+  rice: { id: 'rice', label: 'אורז', icon: '🍚', unit: 'חבילות', servingsPerPackage: 5, desc: 'חבילת 1 ק"ג אורז' },
+  couscous: { id: 'couscous', label: 'קוסקוס', icon: '🥣', unit: 'חבילות', servingsPerPackage: 4, desc: 'שקית קוסקוס להכנה מהירה' },
+  bulgur: { id: 'bulgur', label: 'בורגול', icon: '🌾', unit: 'חבילות', servingsPerPackage: 5, desc: 'חבילת בורגול עבה / דק' },
+};
+
+// Recurring products from "מחסני השוק"
 export const INITIAL_PRODUCTS = [
+  // Meat
   {
     id: 'prod-1',
     category: 'meat',
@@ -82,50 +69,52 @@ export const INITIAL_PRODUCTS = [
     shukNote: 'פלטה נקייה משומן (~850-950 גרם)',
     link: 'https://www.mck.co.il',
   },
+  // 4 Main Side Dishes
   {
-    id: 'prod-3',
+    id: 'prod-chips',
+    category: 'dry',
+    name: 'צ\'יפס קפוא (שקית במחסני השוק)',
+    unit: 'שקיות',
+    pricePerUnit: 14.90,
+    requiredStock: 3,
+    currentStock: 0,
+    shukNote: 'שקית לתנור / טיגון',
+    link: 'https://www.mck.co.il',
+  },
+  {
+    id: 'prod-rice',
     category: 'dry',
     name: 'אורז יסמין קלאסי (1 ק"ג)',
-    unit: 'חבילה',
+    unit: 'חבילות',
     pricePerUnit: 9.90,
     requiredStock: 3,
     currentStock: 0,
-    shukNote: 'בסיס מעולה לאורז קוקוס או לבן',
+    shukNote: 'שקית 1 ק"ג',
     link: 'https://www.mck.co.il',
   },
   {
-    id: 'prod-14',
+    id: 'prod-couscous',
     category: 'dry',
-    name: 'קרם / נוזל קוקוס (לאורז קוקוס)',
-    unit: 'פחית',
+    name: 'קוסקוס מובחר מהיר הכנה',
+    unit: 'חבילות',
     pricePerUnit: 8.90,
-    requiredStock: 2,
+    requiredStock: 3,
     currentStock: 0,
-    shukNote: 'מחסני השוק - לבישול אורז קוקוס עשיר',
+    shukNote: 'שקית קוסקוס (דק / בינוני)',
     link: 'https://www.mck.co.il',
   },
   {
-    id: 'prod-15',
+    id: 'prod-bulgur',
     category: 'dry',
-    name: 'בורגול עבה / בינוני מובחר',
-    unit: 'שקית',
+    name: 'בורגול מובחר (שקית)',
+    unit: 'חבילות',
     pricePerUnit: 7.90,
     requiredStock: 2,
     currentStock: 0,
-    shukNote: 'תוספת משביעה ומעולה עם בצל מטוגן',
+    shukNote: 'שקית בורגול',
     link: 'https://www.mck.co.il',
   },
-  {
-    id: 'prod-4',
-    category: 'dry',
-    name: 'פתיתים אפויים צורות',
-    unit: 'חבילה',
-    pricePerUnit: 6.90,
-    requiredStock: 2,
-    currentStock: 0,
-    shukNote: 'אוסם או מותג מחסני השוק',
-    link: 'https://www.mck.co.il',
-  },
+  // Basics & Cooking
   {
     id: 'prod-5',
     category: 'dry',
@@ -135,17 +124,6 @@ export const INITIAL_PRODUCTS = [
     requiredStock: 2,
     currentStock: 0,
     shukNote: 'שמן לבישול וטיגון',
-    link: 'https://www.mck.co.il',
-  },
-  {
-    id: 'prod-6',
-    category: 'dry',
-    name: 'שמן זית כתית מעולה 750 מ"ל',
-    unit: 'בקבוק',
-    pricePerUnit: 39.90,
-    requiredStock: 1,
-    currentStock: 0,
-    shukNote: 'לתיבול סלטים',
     link: 'https://www.mck.co.il',
   },
   {
@@ -171,17 +149,6 @@ export const INITIAL_PRODUCTS = [
     link: 'https://www.mck.co.il',
   },
   {
-    id: 'prod-9',
-    category: 'veg',
-    name: 'תפוחי אדמה ארוזים',
-    unit: 'שקית',
-    pricePerUnit: 7.90,
-    requiredStock: 2,
-    currentStock: 0,
-    shukNote: 'לאפייה בתנור לצד העוף',
-    link: 'https://www.mck.co.il',
-  },
-  {
     id: 'prod-10',
     category: 'veg',
     name: 'עגבניות ומלפפונים לסלט',
@@ -192,6 +159,7 @@ export const INITIAL_PRODUCTS = [
     shukNote: 'סלט טרי יומי',
     link: 'https://www.mck.co.il',
   },
+  // Cleaning & Dishes
   {
     id: 'prod-11',
     category: 'cleaning',
@@ -227,15 +195,15 @@ export const INITIAL_PRODUCTS = [
   },
 ];
 
-// Clean: 0 initial receipts and 0 deposits
 export const INITIAL_EXPENSES = [];
 export const INITIAL_FUND_DEPOSITS = [];
 
 export const INITIAL_DAILY_MENU = {
   protein: 'chicken_breast',
   portionsPerPlate: 3,
-  side: 'אורז קוקוס עשיר',
-  notes: '',
+  side: 'rice', // 'chips' | 'rice' | 'couscous' | 'bulgur'
+  sideServingsPerPackage: 5,
+  extraNotes: '',
 };
 
 export const INITIAL_PAYBOX_LINK = 'https://payboxapp.page.link/shuk-kitchen';
