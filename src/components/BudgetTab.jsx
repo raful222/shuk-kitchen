@@ -3,9 +3,11 @@ import {
   Wallet, DollarSign, Plus, Receipt, TrendingUp, 
   ArrowUpRight, ArrowDownLeft, Check, Users, ExternalLink,
   Camera, Image as ImageIcon, X, Send, AlertCircle, UserPlus,
-  HelpCircle, Share2, CornerDownLeft, CreditCard, RefreshCw, CheckCircle2, Trash2
+  HelpCircle, Share2, CornerDownLeft, CreditCard, RefreshCw, CheckCircle2, Trash2,
+  Sparkles, Lock, Unlock, Edit3
 } from 'lucide-react';
 import { generateWhatsAppDebtSummary } from '../utils/helpers';
+import { parseReceiptFile } from '../utils/receiptParser';
 
 export const MONTHLY_DUES_PER_MEMBER = 200;
 
@@ -32,7 +34,7 @@ export default function BudgetTab({
   const [historyTab, setHistoryTab] = useState('expenses'); // 'expenses' | 'withdrawals' | 'deposits'
   const [justAddedExpense, setJustAddedExpense] = useState(null);
 
-  // New expense form - starts completely clean and blank
+  // New expense form - with automatic AI/receipt extraction
   const [expenseStore, setExpenseStore] = useState('מחסני השוק');
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseDesc, setExpenseDesc] = useState('');
@@ -40,6 +42,9 @@ export default function BudgetTab({
   const [customPayer, setCustomPayer] = useState('');
   const [receiptImage, setReceiptImage] = useState(null);
   const [receiptFile, setReceiptFile] = useState(null); // { dataUrl, isPdf, name }
+  const [isScanningReceipt, setIsScanningReceipt] = useState(false);
+  const [scanResult, setScanResult] = useState(null);
+  const [isManualAmount, setIsManualAmount] = useState(false);
 
   // New deposit form
   const [depositMemberId, setDepositMemberId] = useState('');
@@ -148,36 +153,54 @@ export default function BudgetTab({
   const estimatedMealsCount = members.length > 0 ? (members.length * 3 * 3) : 0;
   const costPerMeal = estimatedMealsCount > 0 ? (totalExpenses / estimatedMealsCount).toFixed(1) : 0;
 
-  const handleCameraCapture = (e) => {
-    const file = e.target.files?.[0];
+  const processReceiptFile = async (file) => {
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setReceiptFile({ dataUrl: event.target.result, isPdf: false, name: file.name });
-      setReceiptImage(event.target.result);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const isPdf = file.type === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf');
+    
     const reader = new FileReader();
     reader.onload = (event) => {
       setReceiptFile({ dataUrl: event.target.result, isPdf, name: file.name });
       setReceiptImage(event.target.result);
     };
     reader.readAsDataURL(file);
+
+    setIsScanningReceipt(true);
+    setScanResult(null);
+
+    try {
+      const parsed = await parseReceiptFile(file, members);
+      if (parsed && parsed.amount > 0) {
+        setExpenseAmount(String(parsed.amount));
+        if (parsed.store) setExpenseStore(parsed.store);
+        if (parsed.payer) {
+          setExpensePaidBy(parsed.payer);
+          setCustomPayer('');
+        }
+        if (parsed.description) setExpenseDesc(parsed.description);
+        setScanResult(parsed);
+      }
+    } catch (err) {
+      console.warn('Auto-scan receipt error:', err);
+    } finally {
+      setIsScanningReceipt(false);
+    }
+  };
+
+  const handleCameraCapture = (e) => {
+    const file = e.target.files?.[0];
+    if (file) processReceiptFile(file);
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) processReceiptFile(file);
   };
 
   const handleCreateExpense = (e) => {
     e.preventDefault();
     const finalPaidBy = (expensePaidBy === 'custom' ? customPayer.trim() : expensePaidBy);
     if (!expenseAmount || !finalPaidBy) {
-      alert('נא להזין סכום ולבחור מי שילם בקופה');
+      alert('נא להעלות קבלה או לבחור מי שילם בקופה');
       return;
     }
 
@@ -202,6 +225,9 @@ export default function BudgetTab({
     setReceiptImage(null);
     setReceiptFile(null);
     setCustomPayer('');
+    setScanResult(null);
+    setIsManualAmount(false);
+    setIsScanningReceipt(false);
     setShowAddExpenseModal(false);
   };
 
@@ -907,7 +933,13 @@ export default function BudgetTab({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-3.5 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b pb-2.5">
-              <h3 className="font-extrabold text-base text-slate-800">הזנת קבלה + צילום/קובץ</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🧾</span>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-800">הזנת קבלה אוטומטית</h3>
+                  <p className="text-[11px] text-slate-500">הסכום והפרטים נחלצים ישירות מהקובץ</p>
+                </div>
+              </div>
               <button
                 onClick={() => setShowAddExpenseModal(false)}
                 className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200"
@@ -917,23 +949,11 @@ export default function BudgetTab({
             </div>
 
             <form onSubmit={handleCreateExpense} className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">סכום הקבלה (₪):</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={expenseAmount}
-                  onChange={(e) => setExpenseAmount(e.target.value)}
-                  placeholder="350.00"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  required
-                />
-              </div>
-
-              {/* 📸 Dual Upload Options: Camera OR File/PDF/Gallery */}
+              {/* 📸 1. Dual Upload Options: Camera OR File/PDF/Gallery */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-600">
-                  צילום או העלאת קובץ קבלה (תמונה / PDF):
+                <label className="block text-xs font-black text-slate-700 flex items-center justify-between">
+                  <span>1. צילום או העלאת קבלה (קובץ PDF / תמונה):</span>
+                  <span className="text-[10px] text-orange-600 font-bold">זיהוי סכום אוטומטי ⚡</span>
                 </label>
 
                 {receiptFile ? (
@@ -948,12 +968,17 @@ export default function BudgetTab({
                         <span className="text-xs font-bold text-emerald-800 block truncate max-w-[170px]">
                           {receiptFile.name || (receiptFile.isPdf ? 'קובץ PDF' : 'תמונת קבלה')}
                         </span>
-                        <span className="text-[10px] text-emerald-600">הקובץ נטען בהצלחה ✓</span>
+                        <span className="text-[10px] text-emerald-600 font-medium">הקובץ נטען בהצלחה ✓</span>
                       </div>
                     </div>
                     <button
                       type="button"
-                      onClick={() => { setReceiptFile(null); setReceiptImage(null); }}
+                      onClick={() => { 
+                        setReceiptFile(null); 
+                        setReceiptImage(null); 
+                        setScanResult(null); 
+                        setExpenseAmount('');
+                      }}
                       className="text-xs text-rose-600 font-bold hover:underline p-1"
                     >
                       הסר
@@ -991,6 +1016,74 @@ export default function BudgetTab({
                 )}
               </div>
 
+              {/* Scanning indicator */}
+              {isScanningReceipt && (
+                <div className="p-3 bg-orange-50 border border-orange-300 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-orange-900 animate-pulse">
+                  <span className="text-base animate-spin">⏳</span>
+                  <span>סורק את הקבלה ומחלץ סכום ומשלם אוטומטית...</span>
+                </div>
+              )}
+
+              {/* Automatic Scan Banner */}
+              {scanResult && scanResult.amount > 0 && (
+                <div className="p-2.5 bg-emerald-50 border-2 border-emerald-400 rounded-2xl space-y-1 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-emerald-900 flex items-center gap-1">
+                      <Sparkles className="w-4 h-4 text-emerald-600" />
+                      <span>פרטי הקבלה נקלטו אוטומטית!</span>
+                    </span>
+                    <span className="text-[10px] bg-emerald-200 text-emerald-950 font-black px-2 py-0.5 rounded-full">
+                      זיהוי אוטומטי ✓
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800">
+                    סכום: <strong>{scanResult.amount} ₪</strong> {scanResult.payer ? `• משלם שזוהה: ${scanResult.payer}` : ''}
+                  </p>
+                </div>
+              )}
+
+              {/* 💵 2. Amount Field (Automatic by default) */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-slate-700">2. סכום החשבונית (₪):</label>
+                  {expenseAmount && (
+                    <button
+                      type="button"
+                      onClick={() => setIsManualAmount(!isManualAmount)}
+                      className="text-[10px] text-orange-700 hover:text-orange-900 font-bold underline flex items-center gap-0.5"
+                    >
+                      {isManualAmount ? 'נעל סכום' : 'עריכה ידנית ✏️'}
+                    </button>
+                  )}
+                </div>
+
+                {expenseAmount && !isManualAmount ? (
+                  <div className="p-3 bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-2xl flex items-center justify-between shadow-sm border border-slate-700">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-semibold">סכום החשבונית:</span>
+                      <span className="text-2xl font-black text-amber-400">{expenseAmount} ₪</span>
+                    </div>
+                    <span className="text-[10px] bg-white/10 text-emerald-300 px-2.5 py-1 rounded-xl font-bold border border-white/10 flex items-center gap-1">
+                      <Check className="w-3 h-3 text-emerald-400" />
+                      <span>אוטומטי מהקבלה</span>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={expenseAmount}
+                      onChange={(e) => setExpenseAmount(e.target.value)}
+                      placeholder={receiptFile ? 'מזהה סכום מהקובץ...' : 'העלה קובץ או הקלד סכום ידנית...'}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-black text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      required
+                    />
+                    <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">₪</span>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-1">חנות / סניף:</label>
                 <input
@@ -1003,8 +1096,14 @@ export default function BudgetTab({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  מי שילם/ה בקופה? (עבור החשבונית)
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>3. מי שילם/ה בקופה?</span>
+                  {scanResult?.payer && (
+                    <span className="text-[10px] text-emerald-600 font-extrabold flex items-center gap-0.5">
+                      <Sparkles className="w-3 h-3 text-emerald-500" />
+                      <span>זוהה אוטומטית מהחשבונית: {scanResult.payer}</span>
+                    </span>
+                  )}
                 </label>
 
                 {/* Quick Chips for One-Tap Payer Selection */}
