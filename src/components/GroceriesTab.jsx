@@ -10,6 +10,7 @@ import { generateWhatsAppShoppingList } from '../utils/helpers';
 export default function GroceriesTab({
   products = [],
   onUpdateStock,
+  onUpdateProduct,
   onResetAllStock,
   onAddProduct,
   dailyMenu = {},
@@ -23,6 +24,13 @@ export default function GroceriesTab({
   const [showOrderWizard, setShowOrderWizard] = useState(false);
   const [wizardIndex, setWizardIndex] = useState(0);
   const [checkedProductIds, setCheckedProductIds] = useState({});
+
+  // Quick missing item states
+  const [quickAddName, setQuickAddName] = useState('');
+  const [quickAddQty, setQuickAddQty] = useState(1);
+  const [quickAddUnit, setQuickAddUnit] = useState('יח\'');
+  const [wizardQuickName, setWizardQuickName] = useState('');
+  const [quickFeedbackMsg, setQuickFeedbackMsg] = useState('');
 
   // New product form state
   const [newName, setNewName] = useState('');
@@ -38,6 +46,17 @@ export default function GroceriesTab({
     { id: 'veg', label: 'ירקות ופירות', icon: '🥗' },
     { id: 'drinks', label: 'שתייה וחלב', icon: '🥤' },
     { id: 'cleaning', label: 'ניקיון וכלים', icon: '🧼' },
+  ];
+
+  const QUICK_MISSING_SUGGESTIONS = [
+    { label: 'פיתות', name: 'פיתות טריות (שקית)', unit: 'שקיות', cat: 'dry' },
+    { label: 'חומוס', name: 'חומוס טרי 500 גרם', unit: 'יחידה', cat: 'dry' },
+    { label: 'טחינה', name: 'טחינה גולמית 500 גרם', unit: 'יחידה', cat: 'dry' },
+    { label: 'נייר סופג', name: 'נייר סופג למטבח', unit: 'מארז', cat: 'cleaning' },
+    { label: 'שמן', name: 'שמן קנולה מזוכך 1 ליטר', unit: 'בקבוק', cat: 'dry' },
+    { label: 'ביצים', name: 'תבנית ביצים L (30 יח\')', unit: 'תבנית', cat: 'dry' },
+    { label: 'עגבניות', name: 'עגבניות טריות', unit: 'ק"ג', cat: 'veg' },
+    { label: 'מלפפונים', name: 'מלפפונים טריים', unit: 'ק"ג', cat: 'veg' },
   ];
 
   // Calculations: How much is in stock vs how much is needed
@@ -148,6 +167,76 @@ export default function GroceriesTab({
     setNewPrice('');
     setNewRequired(1);
     setShowAddModal(false);
+  };
+
+  const handleQuickAddMissingItem = (nameInput, qtyInput = 1, unitInput = 'יח\'', categoryInput = 'dry') => {
+    const rawName = (nameInput || quickAddName || '').trim();
+    if (!rawName) return;
+
+    const parsedQty = Math.max(1, Number(qtyInput || quickAddQty) || 1);
+    const chosenUnit = unitInput || quickAddUnit || 'יח\'';
+    const chosenCat = categoryInput || 'dry';
+
+    // Check if item already exists in catalog
+    const existing = products.find(p => p.name.trim().toLowerCase() === rawName.toLowerCase());
+
+    if (existing) {
+      if (existing.currentStock >= existing.requiredStock) {
+        onUpdateStock(existing.id, 0);
+      } else {
+        if (onUpdateProduct) {
+          onUpdateProduct({
+            ...existing,
+            requiredStock: existing.requiredStock + parsedQty,
+          });
+        } else {
+          onUpdateStock(existing.id, 0);
+        }
+      }
+      setQuickFeedbackMsg(`✓ המוצר "${existing.name}" נוסף לרשימת ההזמנה!`);
+    } else {
+      const newProduct = {
+        id: `prod-quick-${Date.now()}`,
+        category: chosenCat,
+        name: rawName,
+        unit: chosenUnit,
+        pricePerUnit: 12.0,
+        requiredStock: parsedQty,
+        currentStock: 0,
+        shukNote: 'נוסף מהר להזמנה',
+        link: 'https://www.mck.co.il',
+      };
+      onAddProduct(newProduct);
+      setQuickFeedbackMsg(`✓ המוצר "${rawName}" נוסף בהצלחה לרשימת ההזמנה!`);
+    }
+
+    setQuickAddName('');
+    setQuickAddQty(1);
+    setTimeout(() => setQuickFeedbackMsg(''), 3000);
+  };
+
+  const handleAddExistingToOrder = (product) => {
+    if (product.currentStock < product.requiredStock) {
+      if (onUpdateProduct) {
+        onUpdateProduct({
+          ...product,
+          requiredStock: product.requiredStock + 1,
+        });
+      } else {
+        onUpdateStock(product.id, Math.max(0, product.currentStock - 1));
+      }
+      setQuickFeedbackMsg(`✓ נוסף עוד 1 להזמנה: ${product.name}`);
+    } else {
+      onUpdateStock(product.id, 0);
+      setQuickFeedbackMsg(`✓ "${product.name}" נוסף לרשימת ההזמנה!`);
+    }
+    setTimeout(() => setQuickFeedbackMsg(''), 3000);
+  };
+
+  const handleMarkAsInStock = (product) => {
+    onUpdateStock(product.id, product.requiredStock);
+    setQuickFeedbackMsg(`✓ "${product.name}" סומן כקיים במלאי (הוסר מההזמנה)`);
+    setTimeout(() => setQuickFeedbackMsg(''), 3000);
   };
 
   return (
@@ -299,6 +388,98 @@ export default function GroceriesTab({
         </button>
       </div>
 
+      {/* ⚡ QUICK ADD MISSING ITEM TO ORDER BAR */}
+      <div className="bg-white rounded-3xl p-3.5 border-2 border-orange-200/90 shadow-sm space-y-2.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className="text-base">🛒</span>
+            <span className="font-black text-xs text-slate-800">
+              הוספת פריט שחסר להזמנה מהירה
+            </span>
+          </div>
+          <span className="text-[10px] text-orange-700 bg-orange-50 font-bold px-2 py-0.5 rounded-full border border-orange-200">
+            נכנס ישירות לסל מחסני השוק
+          </span>
+        </div>
+
+        {/* Input row */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleQuickAddMissingItem();
+          }}
+          className="flex items-center gap-1.5"
+        >
+          <div className="flex-1">
+            <input
+              type="text"
+              value={quickAddName}
+              onChange={(e) => setQuickAddName(e.target.value)}
+              placeholder="מה חסר? למשל: חומוס, פיתות, שמן..."
+              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium"
+            />
+          </div>
+
+          <div className="w-14">
+            <input
+              type="number"
+              min="1"
+              max="99"
+              value={quickAddQty}
+              onChange={(e) => setQuickAddQty(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-1.5 py-2 text-xs text-center font-black text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              title="כמות להזמין"
+            />
+          </div>
+
+          <div className="w-18">
+            <select
+              value={quickAddUnit}
+              onChange={(e) => setQuickAddUnit(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-1 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+            >
+              <option value="יח'">יח'</option>
+              <option value="ק&quot;ג">ק"ג</option>
+              <option value="חבילה">חבילה</option>
+              <option value="בקבוק">בקבוק</option>
+              <option value="מארז">מארז</option>
+              <option value="שקיות">שקיות</option>
+            </select>
+          </div>
+
+          <button
+            type="submit"
+            className="px-3 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-xl font-black text-xs shadow-md transition active:scale-95 shrink-0 flex items-center gap-1"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>הוסף</span>
+          </button>
+        </form>
+
+        {/* Quick Suggestion Chips */}
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pt-0.5 text-[10px]">
+          <span className="text-slate-400 font-bold shrink-0 ml-1">נפוצים:</span>
+          {QUICK_MISSING_SUGGESTIONS.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => handleQuickAddMissingItem(item.name, 1, item.unit, item.cat)}
+              className="whitespace-nowrap px-2 py-0.5 bg-slate-100 hover:bg-orange-100 text-slate-700 hover:text-orange-900 border border-slate-200 hover:border-orange-300 rounded-lg font-bold transition active:scale-90"
+            >
+              + {item.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Feedback alert toast */}
+        {quickFeedbackMsg && (
+          <div className="p-2 bg-emerald-50 border border-emerald-300 rounded-xl text-[11px] font-black text-emerald-800 flex items-center gap-1.5 animate-fadeIn">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span>{quickFeedbackMsg}</span>
+          </div>
+        )}
+      </div>
+
       {/* CATEGORY FILTER TABS */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
         {categories.map(cat => (
@@ -423,12 +604,13 @@ export default function GroceriesTab({
                   <th className="p-3 text-center">כמה יש במלאי</th>
                   <th className="p-3 text-center">יעד נדרש</th>
                   <th className="p-3 text-center">נשאר / חסר</th>
+                  <th className="p-3 text-center">הזמנה 🛒</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {filteredProducts.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="text-center py-6 text-slate-400 text-xs italic">
+                    <td colSpan="5" className="text-center py-6 text-slate-400 text-xs italic">
                       אין מוצרים התואמים לסינון שנבחר
                     </td>
                   </tr>
@@ -489,6 +671,42 @@ export default function GroceriesTab({
                               <span>חסר</span>
                               <span>{Math.abs(diff).toFixed(unitDecimals)} {product.unit}</span>
                             </span>
+                          )}
+                        </td>
+
+                        <td className="p-3 text-center whitespace-nowrap">
+                          {isEnough ? (
+                            <button
+                              type="button"
+                              onClick={() => handleAddExistingToOrder(product)}
+                              className="inline-flex items-center gap-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 px-2 py-1 rounded-xl text-[10px] font-black transition active:scale-95 shadow-2xs"
+                              title="סמן כחסר והוסף לרשימת ההזמנה"
+                            >
+                              <ShoppingCart className="w-3 h-3 text-amber-700" />
+                              <span>הוסף להזמנה</span>
+                            </button>
+                          ) : (
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleAddExistingToOrder(product)}
+                                className="inline-flex items-center gap-0.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 px-1.5 py-1 rounded-xl text-[10px] font-black transition active:scale-95"
+                                title="הגדל את הכמות להזמנה ב-1"
+                              >
+                                <Plus className="w-2.5 h-2.5" />
+                                <span>עוד 1</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleMarkAsInStock(product)}
+                                className="inline-flex items-center gap-0.5 bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 px-1.5 py-1 rounded-xl text-[10px] font-bold transition active:scale-95"
+                                title="יש במלאי (הסר מההזמנה)"
+                              >
+                                <Check className="w-2.5 h-2.5 text-emerald-600" />
+                                <span>במלאי</span>
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -577,21 +795,57 @@ export default function GroceriesTab({
                   </div>
                 </div>
 
-                {/* Quick direct search link to Machsanei Hashuk if missing */}
-                {isMissing && (
-                  <div className="mt-2.5 pt-2 border-t border-dashed border-orange-200 flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-orange-950 font-bold">
-                      חסר {qtyNeeded} {product.unit} להזמנה
-                    </span>
-                    <a
-                      href={`https://www.mck.co.il/search?q=${encodeURIComponent(product.name)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-300 rounded-xl text-[11px] font-extrabold transition active:scale-95 shadow-2xs"
+                {/* Quick actions: missing order vs in-stock */}
+                {isMissing ? (
+                  <div className="mt-2.5 pt-2 border-t border-dashed border-orange-200 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-orange-950 font-bold">
+                        חסר {qtyNeeded} {product.unit} להזמנה
+                      </span>
+                      <a
+                        href={`https://www.mck.co.il/search?q=${encodeURIComponent(product.name)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-300 rounded-xl text-[11px] font-extrabold transition active:scale-95 shadow-2xs"
+                      >
+                        <span>הוסף באתר השוק</span>
+                        <ExternalLink className="w-3 h-3 text-orange-700" />
+                      </a>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-1.5 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => handleAddExistingToOrder(product)}
+                        className="flex-1 py-1 px-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 rounded-xl text-[11px] font-black transition active:scale-95 flex items-center justify-center gap-1"
+                        title="הגדל כמות להזמנה"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>עוד 1 להזמנה</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleMarkAsInStock(product)}
+                        className="py-1 px-2.5 bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200 rounded-xl text-[11px] font-bold transition active:scale-95 flex items-center justify-center gap-1"
+                        title="סמן שיש במלאי (הסר מההזמנה)"
+                      >
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span>יש במלאי ✓</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() => handleAddExistingToOrder(product)}
+                      className="w-full py-1.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-black transition active:scale-95 flex items-center justify-center gap-1.5 shadow-2xs"
+                      title="סמן כחסר והוסף להזמנה השבועית"
                     >
-                      <span>הוסף באתר השוק</span>
-                      <ExternalLink className="w-3 h-3 text-orange-700" />
-                    </a>
+                      <ShoppingCart className="w-3.5 h-3.5 text-amber-700" />
+                      <span>חסר במטבח? הוסף להזמנה 🛒</span>
+                    </button>
                   </div>
                 )}
               </div>
@@ -754,6 +1008,36 @@ export default function GroceriesTab({
               <p className="text-[10px] text-slate-400 leading-tight">
                 * כפתור "פתח הכל": פותח את עמודי החיפוש של כל המוצרים בטאבים נפרדים (אשר חלונות קופצים בדפדפן במידה ומופיעה הודעה).
               </p>
+            </div>
+
+            {/* Quick add missing item right inside wizard */}
+            <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-2.5 space-y-1.5">
+              <span className="text-[11px] font-black text-amber-950 block">
+                ➕ שכחתם משהו? הוסף פריט שחסר להזמנה עכשיו:
+              </span>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!wizardQuickName.trim()) return;
+                  handleQuickAddMissingItem(wizardQuickName.trim(), 1, 'יח\'');
+                  setWizardQuickName('');
+                }}
+                className="flex items-center gap-1.5"
+              >
+                <input
+                  type="text"
+                  value={wizardQuickName}
+                  onChange={(e) => setWizardQuickName(e.target.value)}
+                  placeholder="למשל: חומוס, פיתות, שמן..."
+                  className="flex-1 bg-white border border-amber-300 rounded-xl px-2.5 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black shrink-0 transition active:scale-95 shadow-xs"
+                >
+                  + הוסף
+                </button>
+              </form>
             </div>
 
             {/* Step-by-step assistant */}

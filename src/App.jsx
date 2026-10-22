@@ -336,6 +336,12 @@ export default function App() {
     broadcastToCloud({ products: updatedProducts });
   };
 
+  const handleUpdateProduct = (updatedProduct) => {
+    const updatedProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
+    setProducts(updatedProducts);
+    broadcastToCloud({ products: updatedProducts });
+  };
+
   const handleResetAllStock = (targetStockType = 'zero') => {
     // 'zero': mark all items as needed for order (currentStock = 0)
     // 'full': mark all items as already in stock (currentStock = requiredStock)
@@ -560,6 +566,7 @@ export default function App() {
           <GroceriesTab
             products={products}
             onUpdateStock={handleUpdateStock}
+            onUpdateProduct={handleUpdateProduct}
             onResetAllStock={handleResetAllStock}
             onAddProduct={handleAddProduct}
             dailyMenu={dailyMenu}
