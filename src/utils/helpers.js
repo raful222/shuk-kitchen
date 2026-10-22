@@ -190,17 +190,23 @@ export const generateWhatsAppDebtSummary = (arg1 = [], arg2 = {}, arg3 = '', arg
     unpaidMembers = members.filter(m => !m.paidThisMonth);
   }
 
+  const paidCount = members.length - unpaidMembers.length;
+  const totalTarget = members.length * 200;
+  const totalCollected = paidCount * 200;
+
   let msg = `💰 *תמונת מצב קופת אוכל ו-PayBox*\n`;
   msg += `📅 תאריך: ${new Intl.DateTimeFormat('he-IL').format(new Date())}\n`;
   msg += `💵 יתרת קופה מחושבת: *${Math.round(fundBalance)} ₪*\n`;
+  if (members.length > 0) {
+    msg += `🎯 יעד חודשי: *200 ₪ לחבר* (נאספו ${totalCollected} ₪ מתוך ${totalTarget} ₪)\n`;
+  }
   msg += `\n━━━━━━━━━━━━━━━━━\n`;
 
   // 1. Debtors (need to deposit to PayBox)
   if (unpaidMembers.length > 0) {
     msg += `\n🔴 *חברים שטרם הפקידו החודש לקופה:*\n`;
     unpaidMembers.forEach(m => {
-      const debtAmount = Math.abs(memberBalances[m.id] || 0);
-      msg += `▫️ ${m.name}${debtAmount > 0 ? ` (חוב: ${debtAmount} ₪)` : ''}\n`;
+      msg += `▫️ ${m.name} (חוב חודשי: 200 ₪)\n`;
     });
   }
 

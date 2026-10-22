@@ -3,9 +3,11 @@ import {
   Wallet, DollarSign, Plus, Receipt, TrendingUp, 
   ArrowUpRight, ArrowDownLeft, Check, Users, ExternalLink,
   Camera, Image as ImageIcon, X, Send, AlertCircle, UserPlus,
-  HelpCircle, Share2, CornerDownLeft, CreditCard, RefreshCw
+  HelpCircle, Share2, CornerDownLeft, CreditCard, RefreshCw, CheckCircle2
 } from 'lucide-react';
 import { generateWhatsAppDebtSummary } from '../utils/helpers';
+
+export const MONTHLY_DUES_PER_MEMBER = 200;
 
 export default function BudgetTab({
   expenses = [],
@@ -26,33 +28,51 @@ export default function BudgetTab({
   const [viewingReceiptImage, setViewingReceiptImage] = useState(null);
   const [showPayboxExplanation, setShowPayboxExplanation] = useState(false);
   const [historyTab, setHistoryTab] = useState('expenses'); // 'expenses' | 'withdrawals' | 'deposits'
+  const [justAddedExpense, setJustAddedExpense] = useState(null);
 
   // New expense form
   const [expenseStore, setExpenseStore] = useState('מחסני השוק');
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseDesc, setExpenseDesc] = useState('');
-  const [expensePaidBy, setExpensePaidBy] = useState('');
+  const [expensePaidBy, setExpensePaidBy] = useState('מור אלי');
   const [customPayer, setCustomPayer] = useState('');
   const [receiptImage, setReceiptImage] = useState(null);
   const [receiptFile, setReceiptFile] = useState(null); // { dataUrl, isPdf, name }
 
   // New deposit form
   const [depositMemberId, setDepositMemberId] = useState('');
-  const [depositAmount, setDepositAmount] = useState('');
+  const [depositAmount, setDepositAmount] = useState('200');
 
   // New withdrawal form
   const [withdrawalMemberId, setWithdrawalMemberId] = useState('');
+  const [withdrawalMemberName, setWithdrawalMemberName] = useState('');
   const [withdrawalAmount, setWithdrawalAmount] = useState('');
   const [withdrawalReason, setWithdrawalReason] = useState('');
 
+  // Effective deposits: ensure every member with paidThisMonth has an effective deposit of 200 ₪
+  const effectiveDeposits = [...deposits];
+  members.forEach(m => {
+    if (m.paidThisMonth && !effectiveDeposits.some(d => d.memberId === m.id)) {
+      effectiveDeposits.push({
+        id: `dep-monthly-${m.id}`,
+        memberId: m.id,
+        memberName: m.name,
+        amount: MONTHLY_DUES_PER_MEMBER,
+        isMonthlyDues: true,
+        date: new Date().toISOString().split('T')[0],
+        note: 'תשלום חודשי לקופה (200 ₪)',
+      });
+    }
+  });
+
   // Calculations
-  const totalDeposits = deposits.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+  const totalDeposits = effectiveDeposits.reduce((sum, d) => sum + Number(d.amount || 0), 0);
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
   const totalWithdrawals = withdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
 
   // Direct expenses paid straight from the common fund (not from private pocket)
   const directFundExpenses = expenses
-    .filter(e => e.paidBy === 'קופת מזומן משותפת' || e.paidBy === 'קופת פייבוקס')
+    .filter(e => e.paidBy === 'קופת מזומן משותפת' || e.paidBy === 'קופת פייבוקס' || e.paidBy === 'קופת פייבוקס ישירה')
     .reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
   // In a PayBox pool: Fund Balance = Deposits - Withdrawals - Direct Pool Expenses
@@ -60,12 +80,12 @@ export default function BudgetTab({
 
   // Member Balances & Reimbursements ("מי חייב למי")
   const memberLedger = members.map(m => {
-    const memberExpenses = expenses.filter(e => e.paidBy === m.name);
+    const memberExpenses = expenses.filter(e => (e.paidBy || '').trim().toLowerCase() === m.name.trim().toLowerCase());
     const paidOutOfPocket = memberExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const memberWithdrawals = withdrawals.filter(w => w.memberId === m.id);
+    const memberWithdrawals = withdrawals.filter(w => w.memberId === m.id || (w.memberName || '').trim().toLowerCase() === m.name.trim().toLowerCase());
     const withdrawn = memberWithdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
     const reimbursementDue = Math.max(0, paidOutOfPocket - withdrawn);
-    const memberDeposits = deposits.filter(d => d.memberId === m.id);
+    const memberDeposits = effectiveDeposits.filter(d => d.memberId === m.id);
     const totalDeposited = memberDeposits.reduce((sum, d) => sum + Number(d.amount || 0), 0);
 
     return {
@@ -78,7 +98,47 @@ export default function BudgetTab({
     };
   });
 
-  const creditorMembers = memberLedger.filter(item => item.reimbursementDue > 0);
+  // External payers who paid expenses out of pocket (e.g. מור אלי from the invoice or typed custom name)
+  const nonMemberPayers = Array.from(
+    new Set(
+      expenses
+        .map(e => (e.paidBy || '').trim())
+        .filter(payer => 
+          payer && 
+          payer !== 'קופת מזומן משותפת' && 
+          payer !== 'קופת פייבוקס' && 
+          payer !== 'קופת פייבוקס ישירה' &&
+          !members.some(m => m.name.trim().toLowerCase() === payer.toLowerCase())
+        )
+    )
+  ).map(payerName => {
+    const payerExpenses = expenses.filter(e => (e.paidBy || '').trim().toLowerCase() === payerName.toLowerCase());
+    const paidOutOfPocket = payerExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const payerWithdrawals = withdrawals.filter(w => 
+      w.memberId === `ext-${payerName}` || 
+      w.memberId === payerName || 
+      (w.memberName || '').trim().toLowerCase() === payerName.toLowerCase()
+    );
+    const withdrawn = payerWithdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
+    const reimbursementDue = Math.max(0, paidOutOfPocket - withdrawn);
+
+    return {
+      member: {
+        id: `ext-${payerName}`,
+        name: payerName,
+        avatar: '💳',
+        isExternal: true,
+      },
+      paidOutOfPocket,
+      withdrawn,
+      reimbursementDue,
+      totalDeposited: 0,
+      hasPaidThisMonth: false,
+    };
+  });
+
+  const fullLedger = [...memberLedger, ...nonMemberPayers];
+  const creditorMembers = fullLedger.filter(item => item.reimbursementDue > 0);
   const unpaidMembers = members.filter(m => !m.paidThisMonth);
   const paidMembersCount = members.filter(m => !!m.paidThisMonth).length;
 
@@ -115,15 +175,16 @@ export default function BudgetTab({
     setExpenseAmount('1396.40');
     setExpenseStore('מחסני השוק (אונליין)');
     setExpensePaidBy('מור אלי');
+    setCustomPayer('');
     setExpenseDesc('41 פריטים: 10.3 ק"ג עופות (פרגיות+שניצל), אורז בסמטי, קוסקוס, צ\'יפס, ירקות, שתייה וכלים');
   };
 
   const handleCreateExpense = (e) => {
     e.preventDefault();
-    const finalPaidBy = (expensePaidBy === 'custom' ? customPayer.trim() : expensePaidBy) || 'קופת מזומן משותפת';
+    const finalPaidBy = (expensePaidBy === 'custom' ? customPayer.trim() : expensePaidBy) || 'מור אלי';
     if (!expenseAmount || !finalPaidBy) return;
 
-    onAddExpense({
+    const newExpense = {
       id: `exp-${Date.now()}`,
       date: new Date().toISOString().split('T')[0],
       store: expenseStore,
@@ -132,7 +193,11 @@ export default function BudgetTab({
       paidBy: finalPaidBy,
       receiptImage: receiptImage || null,
       receiptFile: receiptFile || null,
-    });
+    };
+
+    onAddExpense(newExpense);
+    setJustAddedExpense(newExpense);
+    setHistoryTab('expenses');
 
     setExpenseAmount('');
     setExpenseDesc('');
@@ -146,16 +211,20 @@ export default function BudgetTab({
     e.preventDefault();
     if (!depositMemberId || !depositAmount) return;
 
+    const member = members.find(m => m.id === depositMemberId);
+
     onAddDeposit({
       id: `dep-${Date.now()}`,
       memberId: depositMemberId,
+      memberName: member?.name || 'חבר צוות',
       amount: parseFloat(depositAmount),
       date: new Date().toISOString().split('T')[0],
+      note: 'הפקדה לקופה המשותפת',
     });
 
     onToggleMemberPayment(depositMemberId, true);
 
-    setDepositAmount('');
+    setDepositAmount('200');
     setDepositMemberId('');
     setShowAddDepositModal(false);
   };
@@ -164,11 +233,14 @@ export default function BudgetTab({
     e.preventDefault();
     if (!withdrawalMemberId || !withdrawalAmount) return;
 
-    const member = members.find(m => m.id === withdrawalMemberId);
+    const matchedCreditor = fullLedger.find(c => c.member.id === withdrawalMemberId || c.member.name === withdrawalMemberId);
+    const matchedMember = members.find(m => m.id === withdrawalMemberId);
+    const finalName = withdrawalMemberName || matchedCreditor?.member.name || matchedMember?.name || withdrawalMemberId;
+
     onAddWithdrawal({
       id: `with-${Date.now()}`,
       memberId: withdrawalMemberId,
-      memberName: member?.name || 'חבר צוות',
+      memberName: finalName,
       amount: parseFloat(withdrawalAmount),
       reason: withdrawalReason.trim() || 'החזר כספי על קנייה במחסני השוק',
       date: new Date().toISOString().split('T')[0],
@@ -176,12 +248,14 @@ export default function BudgetTab({
 
     setWithdrawalAmount('');
     setWithdrawalMemberId('');
+    setWithdrawalMemberName('');
     setWithdrawalReason('');
     setShowAddWithdrawalModal(false);
   };
 
-  const handleOpenWithdrawalForMember = (memberId, defaultAmount) => {
+  const handleOpenWithdrawalForMember = (memberId, defaultAmount, memberName) => {
     setWithdrawalMemberId(memberId);
+    setWithdrawalMemberName(memberName || '');
     setWithdrawalAmount(defaultAmount > 0 ? String(defaultAmount) : '');
     setWithdrawalReason('החזר על קניות מחסני השוק');
     setShowAddWithdrawalModal(true);
@@ -189,7 +263,7 @@ export default function BudgetTab({
 
   const handleOpenDepositForMember = (memberId) => {
     setDepositMemberId(memberId);
-    setDepositAmount('150');
+    setDepositAmount('200');
     setShowAddDepositModal(true);
   };
 
@@ -212,6 +286,37 @@ export default function BudgetTab({
   return (
     <div className="space-y-4 pb-20 pt-2 px-3 sm:px-4 max-w-md mx-auto">
       
+      {/* 🔔 NOTIFICATION: JUST ADDED EXPENSE */}
+      {justAddedExpense && (
+        <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-500 text-white rounded-3xl p-4 shadow-lg flex items-center justify-between gap-3 animate-fade-in border border-orange-400/40">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-xl shrink-0">
+              🧾
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-black text-xs">הקבלה הוזנה בהצלחה!</span>
+                <span className="bg-white/25 px-1.5 py-0.5 rounded-md text-[10px] font-extrabold">
+                  {justAddedExpense.amount} ₪
+                </span>
+              </div>
+              <p className="text-[11px] text-orange-100 mt-0.5">
+                שולם ע"י: <span className="font-extrabold text-white underline">{justAddedExpense.paidBy}</span>
+                {justAddedExpense.paidBy !== 'קופת פייבוקס' && justAddedExpense.paidBy !== 'קופת פייבוקס ישירה' && justAddedExpense.paidBy !== 'קופת מזומן משותפת' && (
+                  <span> • זכאי/ת להחזר מהקופה</span>
+                )}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setJustAddedExpense(null)}
+            className="w-7 h-7 rounded-full bg-black/20 hover:bg-black/30 flex items-center justify-center text-xs font-bold text-white shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* 💳 PAYBOX PROMINENT DIRECT LINK & INFO BANNER */}
       <div className="bg-gradient-to-r from-blue-600 via-sky-600 to-blue-700 text-white rounded-3xl p-4 shadow-lg space-y-2">
         <div className="flex items-center justify-between gap-3">
@@ -326,6 +431,7 @@ export default function BudgetTab({
           <button
             onClick={() => {
               setWithdrawalMemberId('');
+              setWithdrawalMemberName('');
               setWithdrawalAmount('');
               setWithdrawalReason('');
               setShowAddWithdrawalModal(true);
@@ -346,7 +452,7 @@ export default function BudgetTab({
               <CreditCard className="w-4 h-4 text-orange-600" />
               <span>מי חייב למי וזכאות להחזרים</span>
             </h3>
-            <p className="text-[11px] text-slate-500">מי שילם מכספו הפרטי ומי טרם הפקיד</p>
+            <p className="text-[11px] text-slate-500">מי שילם מכספו הפרטי ומי טרם הפקיד (200 ₪ לחודש)</p>
           </div>
 
           <button
@@ -394,8 +500,8 @@ export default function BudgetTab({
                       מגיע: {item.reimbursementDue} ₪
                     </span>
                     <button
-                      onClick={() => handleOpenWithdrawalForMember(item.member.id, item.reimbursementDue)}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2 py-1 rounded-lg transition active:scale-95"
+                      onClick={() => handleOpenWithdrawalForMember(item.member.id, item.reimbursementDue, item.member.name)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-xl transition active:scale-95 shadow-xs"
                     >
                       רשום החזר
                     </button>
@@ -427,18 +533,18 @@ export default function BudgetTab({
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base">{m.avatar || '👤'}</span>
-                    <span className="font-extrabold text-xs text-slate-800">{m.name}</span>
+                    <div>
+                      <span className="font-extrabold text-xs text-slate-800 block">{m.name}</span>
+                      <span className="text-[10px] text-rose-600 font-bold">חוב חודשי: 200 ₪</span>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-rose-600">
-                      טרם הפקיד/ה ⏳
-                    </span>
                     <button
-                      onClick={() => handleOpenDepositForMember(m.id)}
-                      className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] px-2 py-1 rounded-lg transition active:scale-95"
+                      onClick={() => onToggleMemberPayment(m.id, true)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-xl transition active:scale-95 shadow-xs"
                     >
-                      רשום הפקדה
+                      סמן כשילם (200 ₪)
                     </button>
                   </div>
                 </div>
@@ -453,12 +559,17 @@ export default function BudgetTab({
       <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/80 space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-emerald-600" />
-              <span>סטטוס תשלום החודש</span>
-            </h3>
-            <p className="text-[11px] text-slate-500">
-              {paidMembersCount} מתוך {members.length} שילמו לקופה
+            <div className="flex items-center gap-2">
+              <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
+                <Users className="w-4 h-4 text-emerald-600" />
+                <span>סטטוס תשלום החודש</span>
+              </h3>
+              <span className="bg-emerald-100 text-emerald-800 font-extrabold text-[10px] px-2 py-0.5 rounded-full border border-emerald-200">
+                200 ₪ לחבר
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-600 mt-0.5 font-medium">
+              נאספו <span className="font-black text-emerald-700">{(paidMembersCount * MONTHLY_DUES_PER_MEMBER).toLocaleString()} ₪</span> מתוך {(members.length * MONTHLY_DUES_PER_MEMBER).toLocaleString()} ₪ ({paidMembersCount}/{members.length} שילמו)
             </p>
           </div>
 
@@ -472,6 +583,22 @@ export default function BudgetTab({
             </button>
           )}
         </div>
+
+        {/* Visual Progress Bar */}
+        {members.length > 0 && (
+          <div className="space-y-1">
+            <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5">
+              <div 
+                className="bg-gradient-to-r from-emerald-500 to-teal-500 h-full rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(100, Math.round((paidMembersCount / members.length) * 100))}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[10px] text-slate-500 font-semibold px-0.5">
+              <span>{Math.round((paidMembersCount / members.length) * 100)}% נאספו ({paidMembersCount * MONTHLY_DUES_PER_MEMBER} ₪)</span>
+              <span>יעד: {(members.length * MONTHLY_DUES_PER_MEMBER).toLocaleString()} ₪</span>
+            </div>
+          </div>
+        )}
 
         {members.length === 0 ? (
           <div className="text-center py-4 space-y-2">
@@ -493,24 +620,28 @@ export default function BudgetTab({
                 <button
                   key={member.id}
                   onClick={() => onToggleMemberPayment(member.id, !hasPaid)}
-                  className={`p-2.5 rounded-2xl border text-right flex items-center justify-between transition-all ${
+                  className={`p-3 rounded-2xl border text-right flex items-center justify-between transition-all active:scale-98 ${
                     hasPaid
-                      ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950 font-bold'
-                      : 'bg-rose-50/60 border-rose-200 text-rose-900 font-medium'
+                      ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950 font-bold shadow-2xs'
+                      : 'bg-rose-50/70 border-rose-200 text-rose-900 font-medium'
                   }`}
                 >
                   <div className="truncate">
                     <div className="flex items-center gap-1.5 truncate">
-                      <span className="text-sm shrink-0">{member.avatar}</span>
-                      <span className="text-xs truncate">{member.name}</span>
+                      <span className="text-base shrink-0">{member.avatar}</span>
+                      <span className="text-xs font-bold truncate">{member.name}</span>
                     </div>
-                    <span className={`text-[10px] block mt-0.5 font-bold ${hasPaid ? 'text-emerald-700' : 'text-rose-600'}`}>
-                      {hasPaid ? 'שילם ✓' : 'טרם שילם ⏳'}
-                    </span>
+                    <div className="mt-1 flex items-center gap-1">
+                      <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md ${
+                        hasPaid ? 'bg-emerald-200 text-emerald-900' : 'bg-rose-200 text-rose-900'
+                      }`}>
+                        {hasPaid ? 'שילם 200 ₪ ✓' : 'חייב 200 ₪ ⏳'}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0 ${
-                    hasPaid ? 'bg-emerald-600 text-white' : 'bg-rose-400 text-white'
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 font-bold ${
+                    hasPaid ? 'bg-emerald-600 text-white shadow-xs' : 'bg-rose-400 text-white'
                   }`}>
                     {hasPaid ? '✓' : '✕'}
                   </div>
@@ -553,7 +684,7 @@ export default function BudgetTab({
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              הפקדות ({deposits.length})
+              הפקדות ({effectiveDeposits.length})
             </button>
           </div>
         </div>
@@ -576,7 +707,7 @@ export default function BudgetTab({
                       {expense.receiptImage ? (
                         <button
                           onClick={() => setViewingReceiptImage(expense.receiptImage)}
-                          className="w-10 h-10 rounded-xl overflow-hidden border border-orange-300 shrink-0 relative group flex items-center justify-center bg-orange-50"
+                          className="w-11 h-11 rounded-xl overflow-hidden border border-orange-300 shrink-0 relative group flex items-center justify-center bg-orange-50 shadow-2xs"
                           title="לחץ לצפייה בקבלה"
                         >
                           {expense.receiptImage.startsWith('data:application/pdf') ? (
@@ -593,20 +724,28 @@ export default function BudgetTab({
                           </div>
                         </button>
                       ) : (
-                        <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center text-base shrink-0">
+                        <div className="w-11 h-11 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center text-base shrink-0">
                           🧾
                         </div>
                       )}
 
                       <div>
                         <h4 className="font-bold text-xs text-slate-800">{expense.description}</h4>
-                        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
-                          <span className="font-semibold text-orange-700">{expense.store}</span>
-                          <span>•</span>
-                          <span>שולם ע"י: {expense.paidBy}</span>
-                          <span>•</span>
-                          <span>{expense.date}</span>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[11px]">
+                          <span className="font-semibold text-orange-700 bg-orange-100/70 border border-orange-200 px-1.5 py-0.5 rounded-md">
+                            🏪 {expense.store}
+                          </span>
+                          <span className="font-extrabold text-blue-900 bg-blue-100/80 border border-blue-200 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                            💳 שולם ע"י: {expense.paidBy}
+                          </span>
+                          <span className="text-slate-400">•</span>
+                          <span className="text-slate-500">{expense.date}</span>
                         </div>
+                        {expense.paidBy !== 'קופת פייבוקס' && expense.paidBy !== 'קופת פייבוקס ישירה' && expense.paidBy !== 'קופת מזומן משותפת' && (
+                          <div className="mt-1 text-[10px] text-emerald-700 font-bold flex items-center gap-1">
+                            <span>💡 שולם מכספו/ה הפרטי – זכאי/ת להחזר מקופת ה-PayBox</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -661,13 +800,13 @@ export default function BudgetTab({
         {/* 3. Deposits Tab */}
         {historyTab === 'deposits' && (
           <div>
-            {deposits.length === 0 ? (
+            {effectiveDeposits.length === 0 ? (
               <p className="text-xs text-slate-400 text-center py-4 italic">
                 אין הפקדות רשומות עד כה.
               </p>
             ) : (
               <div className="space-y-2">
-                {deposits.map(d => {
+                {effectiveDeposits.map(d => {
                   const member = members.find(m => m.id === d.memberId);
                   return (
                     <div
@@ -679,8 +818,8 @@ export default function BudgetTab({
                           💰
                         </div>
                         <div>
-                          <h4 className="font-bold text-xs text-slate-800">{member?.name || 'חבר צוות'}</h4>
-                          <span className="text-[11px] text-slate-500">{d.date}</span>
+                          <h4 className="font-bold text-xs text-slate-800">{member?.name || d.memberName || 'חבר צוות'}</h4>
+                          <span className="text-[11px] text-slate-500">{d.note || 'הפקדה לקופה'} • {d.date}</span>
                         </div>
                       </div>
 
@@ -844,17 +983,62 @@ export default function BudgetTab({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">מי שילם/ה בקופה?</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  מי שילם/ה בקופה? (עבור החשבונית)
+                </label>
+
+                {/* Quick Chips for One-Tap Payer Selection */}
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => { setExpensePaidBy('מור אלי'); setCustomPayer(''); }}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition border ${
+                      expensePaidBy === 'מור אלי'
+                        ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
+                        : 'bg-orange-50 text-orange-900 border-orange-200 hover:bg-orange-100'
+                    }`}
+                  >
+                    💳 מור אלי (מהחשבונית)
+                  </button>
+
+                  {members.map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => { setExpensePaidBy(m.name); setCustomPayer(''); }}
+                      className={`px-2 py-1 rounded-xl text-xs font-bold transition border ${
+                        expensePaidBy === m.name
+                          ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
+                          : 'bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-200'
+                      }`}
+                    >
+                      {m.avatar} {m.name}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => { setExpensePaidBy('קופת פייבוקס ישירה'); setCustomPayer(''); }}
+                    className={`px-2 py-1 rounded-xl text-xs font-bold transition border ${
+                      expensePaidBy === 'קופת פייבוקס ישירה'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                        : 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
+                    }`}
+                  >
+                    🏦 קופת פייבוקס
+                  </button>
+                </div>
+
                 <select
                   value={expensePaidBy}
                   onChange={(e) => setExpensePaidBy(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800"
                   required
                 >
-                  <option value="">בחר/י שם...</option>
+                  <option value="">בחר/י שם משלם...</option>
                   <option value="מור אלי">מור אלי (מהחשבונית)</option>
+                  <option value="קופת פייבוקס ישירה">קופת פייבוקס ישירה</option>
                   <option value="קופת מזומן משותפת">קופת מזומן משותפת</option>
-                  <option value="קופת פייבוקס">קופת פייבוקס ישירה</option>
                   {members.map(m => (
                     <option key={m.id} value={m.name}>{m.name} (שילם מכספו הפרטי)</option>
                   ))}
@@ -867,9 +1051,24 @@ export default function BudgetTab({
                     value={customPayer}
                     onChange={(e) => setCustomPayer(e.target.value)}
                     placeholder="הקלד את שם המשלם..."
-                    className="w-full mt-1.5 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
+                    className="w-full mt-1.5 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold"
                     required
                   />
+                )}
+
+                {/* Helpful note explaining reimbursement */}
+                {expensePaidBy && (
+                  <div className="mt-2 p-2 rounded-xl text-[11px] font-medium leading-relaxed bg-slate-100 text-slate-700 border border-slate-200">
+                    {expensePaidBy === 'קופת פייבוקס ישירה' || expensePaidBy === 'קופת מזומן משותפת' ? (
+                      <span className="text-blue-800 font-bold">
+                        🏦 התשלום יקוזז ישירות מיתרת קופת הפייבוקס המשותפת.
+                      </span>
+                    ) : (
+                      <span className="text-emerald-800 font-bold">
+                        💡 {expensePaidBy === 'custom' ? (customPayer || 'המשלם') : expensePaidBy} שילם/ה מכספו/ה הפרטי. לאחר השמירה, הוא/היא יופיע/ה מיד ברשימת הזכאים להחזר מקופת ה-PayBox!
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -933,7 +1132,7 @@ export default function BudgetTab({
                   step="10"
                   value={depositAmount}
                   onChange={(e) => setDepositAmount(e.target.value)}
-                  placeholder="150"
+                  placeholder="200"
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800"
                   required
                 />
@@ -973,22 +1172,46 @@ export default function BudgetTab({
                 <label className="block text-xs font-bold text-slate-600 mb-1">מי משך/ה החזר?</label>
                 <select
                   value={withdrawalMemberId}
-                  onChange={(e) => setWithdrawalMemberId(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setWithdrawalMemberId(val);
+                    const creditor = fullLedger.find(c => c.member.id === val || c.member.name === val);
+                    if (creditor) {
+                      setWithdrawalMemberName(creditor.member.name);
+                      if (creditor.reimbursementDue > 0) {
+                        setWithdrawalAmount(String(creditor.reimbursementDue));
+                      }
+                    }
+                  }}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
                   required
                 >
-                  <option value="">בחר/י חבר צוות...</option>
-                  {members.map(m => (
-                    <option key={m.id} value={m.id}>{m.avatar} {m.name}</option>
+                  <option value="">בחר/י מי מקבל/ת החזר...</option>
+                  {fullLedger.map(c => (
+                    <option key={c.member.id} value={c.member.id}>
+                      {c.member.avatar || '👤'} {c.member.name} {c.reimbursementDue > 0 ? `(מגיע לו/ה: ${c.reimbursementDue} ₪)` : ''}
+                    </option>
                   ))}
+                  <option value="custom">אחר (הקלד שם)...</option>
                 </select>
+
+                {withdrawalMemberId === 'custom' && (
+                  <input
+                    type="text"
+                    value={withdrawalMemberName}
+                    onChange={(e) => setWithdrawalMemberName(e.target.value)}
+                    placeholder="הקלד שם למשיכת ההחזר..."
+                    className="w-full mt-1.5 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold"
+                    required
+                  />
+                )}
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-1">סכום המשיכה (₪):</label>
                 <input
                   type="number"
-                  step="0.5"
+                  step="0.1"
                   value={withdrawalAmount}
                   onChange={(e) => setWithdrawalAmount(e.target.value)}
                   placeholder="280.00"

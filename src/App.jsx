@@ -78,6 +78,37 @@ export default function App() {
   useEffect(() => { setStored('shuk_swap_requests_clean', swapRequests); }, [swapRequests]);
   useEffect(() => { setStored('shuk_paybox_link', payboxLink); }, [payboxLink]);
 
+  // Auto-reconcile deposits for members marked as paid (200 ₪ default per member)
+  useEffect(() => {
+    if (!members || members.length === 0) return;
+    const paidMembers = members.filter(m => !!m.paidThisMonth);
+    if (paidMembers.length === 0) return;
+
+    let hasMissing = false;
+    const currentDeposits = [...deposits];
+
+    paidMembers.forEach(m => {
+      const exists = currentDeposits.some(d => d.memberId === m.id && (d.isMonthlyDues || d.id === `dep-monthly-${m.id}`));
+      if (!exists) {
+        hasMissing = true;
+        currentDeposits.unshift({
+          id: `dep-monthly-${m.id}`,
+          memberId: m.id,
+          memberName: m.name,
+          amount: 200,
+          isMonthlyDues: true,
+          date: new Date().toISOString().split('T')[0],
+          note: 'תשלום חודשי לקופה (200 ₪)',
+        });
+      }
+    });
+
+    if (hasMissing) {
+      setDeposits(currentDeposits);
+      broadcastToCloud({ deposits: currentDeposits });
+    }
+  }, [members]);
+
   // Subscribe to cloud updates silently in the background
   useEffect(() => {
     if (!firebaseConfig) return;
@@ -328,7 +359,30 @@ export default function App() {
       return { ...m, paidThisMonth: hasPaid };
     });
     setMembers(updatedMembers);
-    broadcastToCloud({ members: updatedMembers });
+
+    let updatedDeposits = [...deposits];
+    if (hasPaid) {
+      const exists = updatedDeposits.some(d => d.memberId === memberId && (d.isMonthlyDues || d.id === `dep-monthly-${memberId}`));
+      if (!exists) {
+        const member = members.find(m => m.id === memberId);
+        const newDep = {
+          id: `dep-monthly-${memberId}`,
+          memberId,
+          memberName: member?.name || 'חבר צוות',
+          amount: 200,
+          isMonthlyDues: true,
+          date: new Date().toISOString().split('T')[0],
+          note: 'תשלום חודשי לקופה (200 ₪)',
+        };
+        updatedDeposits = [newDep, ...updatedDeposits];
+        setDeposits(updatedDeposits);
+      }
+    } else {
+      updatedDeposits = updatedDeposits.filter(d => !(d.memberId === memberId && (d.isMonthlyDues || d.id === `dep-monthly-${memberId}`)));
+      setDeposits(updatedDeposits);
+    }
+
+    broadcastToCloud({ members: updatedMembers, deposits: updatedDeposits });
   };
 
   const handleUpdateDailyMenu = (newMenu) => {
