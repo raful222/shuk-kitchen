@@ -3,7 +3,7 @@ import {
   Wallet, DollarSign, Plus, Receipt, TrendingUp, 
   ArrowUpRight, ArrowDownLeft, Check, Users, ExternalLink,
   Camera, Image as ImageIcon, X, Send, AlertCircle, UserPlus,
-  HelpCircle, Share2, CornerDownLeft, CreditCard, RefreshCw, CheckCircle2
+  HelpCircle, Share2, CornerDownLeft, CreditCard, RefreshCw, CheckCircle2, Trash2
 } from 'lucide-react';
 import { generateWhatsAppDebtSummary } from '../utils/helpers';
 
@@ -16,6 +16,8 @@ export default function BudgetTab({
   members = [],
   payboxLink = 'https://payboxapp.page.link/shuk-kitchen',
   onAddExpense,
+  onDeleteExpense,
+  onClearAllExpenses,
   onAddDeposit,
   onAddWithdrawal,
   onToggleMemberPayment,
@@ -30,11 +32,11 @@ export default function BudgetTab({
   const [historyTab, setHistoryTab] = useState('expenses'); // 'expenses' | 'withdrawals' | 'deposits'
   const [justAddedExpense, setJustAddedExpense] = useState(null);
 
-  // New expense form
+  // New expense form - starts completely clean and blank
   const [expenseStore, setExpenseStore] = useState('מחסני השוק');
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseDesc, setExpenseDesc] = useState('');
-  const [expensePaidBy, setExpensePaidBy] = useState('מור אלי');
+  const [expensePaidBy, setExpensePaidBy] = useState('');
   const [customPayer, setCustomPayer] = useState('');
   const [receiptImage, setReceiptImage] = useState(null);
   const [receiptFile, setReceiptFile] = useState(null); // { dataUrl, isPdf, name }
@@ -171,23 +173,18 @@ export default function BudgetTab({
     reader.readAsDataURL(file);
   };
 
-  const handleLoadLatestShukReceipt = () => {
-    setExpenseAmount('1396.40');
-    setExpenseStore('מחסני השוק (אונליין)');
-    setExpensePaidBy('מור אלי');
-    setCustomPayer('');
-    setExpenseDesc('41 פריטים: 10.3 ק"ג עופות (פרגיות+שניצל), אורז בסמטי, קוסקוס, צ\'יפס, ירקות, שתייה וכלים');
-  };
-
   const handleCreateExpense = (e) => {
     e.preventDefault();
-    const finalPaidBy = (expensePaidBy === 'custom' ? customPayer.trim() : expensePaidBy) || 'מור אלי';
-    if (!expenseAmount || !finalPaidBy) return;
+    const finalPaidBy = (expensePaidBy === 'custom' ? customPayer.trim() : expensePaidBy);
+    if (!expenseAmount || !finalPaidBy) {
+      alert('נא להזין סכום ולבחור מי שילם בקופה');
+      return;
+    }
 
     const newExpense = {
       id: `exp-${Date.now()}`,
       date: new Date().toISOString().split('T')[0],
-      store: expenseStore,
+      store: expenseStore || 'מחסני השוק',
       description: expenseDesc.trim() || 'קנייה במחסני השוק',
       amount: parseFloat(expenseAmount),
       paidBy: finalPaidBy,
@@ -201,6 +198,7 @@ export default function BudgetTab({
 
     setExpenseAmount('');
     setExpenseDesc('');
+    setExpensePaidBy('');
     setReceiptImage(null);
     setReceiptFile(null);
     setCustomPayer('');
@@ -691,10 +689,28 @@ export default function BudgetTab({
 
         {/* 1. Expenses / Receipts Tab */}
         {historyTab === 'expenses' && (
-          <div>
+          <div className="space-y-3">
+            {expenses.length > 0 && (
+              <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+                <span className="text-xs text-slate-500 font-bold">קבלות קיימות ({expenses.length})</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('האם למחוק את כל הקבלות הקיימות כדי שתוכל להעלות מחדש בעצמך?')) {
+                      onClearAllExpenses && onClearAllExpenses();
+                    }
+                  }}
+                  className="text-[11px] text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1 hover:underline bg-rose-50 px-2.5 py-1 rounded-xl border border-rose-200 active:scale-95 transition"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>נקה את כל הקבלות</span>
+                </button>
+              </div>
+            )}
+
             {expenses.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-4 italic">
-                אין קבלות עדיין. לחץ למעלה על "הזנת קבלה" כדי לתעד קנייה.
+              <p className="text-xs text-slate-400 text-center py-5 italic">
+                אין קבלות רשומות כרגע. לחץ למעלה על "הזנת קבלה" כדי להעלות קבלה חדשה.
               </p>
             ) : (
               <div className="space-y-2">
@@ -749,9 +765,23 @@ export default function BudgetTab({
                       </div>
                     </div>
 
-                    <span className="font-black text-sm text-rose-600 shrink-0">
-                      -{expense.amount} ₪
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-black text-sm text-rose-600">
+                        -{expense.amount} ₪
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`האם למחוק את הקבלה ע"ס ${expense.amount} ₪ ששולמה ע"י ${expense.paidBy}?`)) {
+                            onDeleteExpense && onDeleteExpense(expense.id);
+                          }
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-100 rounded-xl transition"
+                        title="מחק קבלה זו"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -886,16 +916,6 @@ export default function BudgetTab({
               </button>
             </div>
 
-            {/* ⚡ Quick Load from Machsanei HaShuk invoice button */}
-            <button
-              type="button"
-              onClick={handleLoadLatestShukReceipt}
-              className="w-full py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-950 rounded-2xl text-[11px] font-black border border-amber-300 flex items-center justify-center gap-1.5 transition active:scale-95 shadow-2xs"
-            >
-              <span>⚡</span>
-              <span>טען את חשבונית מחסני השוק האחרונה (1,396.40 ₪)</span>
-            </button>
-
             <form onSubmit={handleCreateExpense} className="space-y-3">
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-1">סכום הקבלה (₪):</label>
@@ -989,24 +1009,12 @@ export default function BudgetTab({
 
                 {/* Quick Chips for One-Tap Payer Selection */}
                 <div className="flex flex-wrap gap-1.5 mb-2">
-                  <button
-                    type="button"
-                    onClick={() => { setExpensePaidBy('מור אלי'); setCustomPayer(''); }}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition border ${
-                      expensePaidBy === 'מור אלי'
-                        ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
-                        : 'bg-orange-50 text-orange-900 border-orange-200 hover:bg-orange-100'
-                    }`}
-                  >
-                    💳 מור אלי (מהחשבונית)
-                  </button>
-
                   {members.map(m => (
                     <button
                       key={m.id}
                       type="button"
                       onClick={() => { setExpensePaidBy(m.name); setCustomPayer(''); }}
-                      className={`px-2 py-1 rounded-xl text-xs font-bold transition border ${
+                      className={`px-2.5 py-1 rounded-xl text-xs font-bold transition border ${
                         expensePaidBy === m.name
                           ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
                           : 'bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-200'
@@ -1019,13 +1027,25 @@ export default function BudgetTab({
                   <button
                     type="button"
                     onClick={() => { setExpensePaidBy('קופת פייבוקס ישירה'); setCustomPayer(''); }}
-                    className={`px-2 py-1 rounded-xl text-xs font-bold transition border ${
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition border ${
                       expensePaidBy === 'קופת פייבוקס ישירה'
                         ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                         : 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
                     }`}
                   >
-                    🏦 קופת פייבוקס
+                    🏦 קופת פייבוקס ישירה
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setExpensePaidBy('custom'); }}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition border ${
+                      expensePaidBy === 'custom'
+                        ? 'bg-slate-800 text-white border-slate-800'
+                        : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                    }`}
+                  >
+                    ✍️ שם אחר...
                   </button>
                 </div>
 
@@ -1035,13 +1055,12 @@ export default function BudgetTab({
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800"
                   required
                 >
-                  <option value="">בחר/י שם משלם...</option>
-                  <option value="מור אלי">מור אלי (מהחשבונית)</option>
+                  <option value="">בחר/י מי שילם/ה בקופה...</option>
+                  {members.map(m => (
+                    <option key={m.id} value={m.name}>{m.name} (שילם/ה מכספו/ה הפרטי)</option>
+                  ))}
                   <option value="קופת פייבוקס ישירה">קופת פייבוקס ישירה</option>
                   <option value="קופת מזומן משותפת">קופת מזומן משותפת</option>
-                  {members.map(m => (
-                    <option key={m.id} value={m.name}>{m.name} (שילם מכספו הפרטי)</option>
-                  ))}
                   <option value="custom">אחר (הקלד שם)...</option>
                 </select>
 

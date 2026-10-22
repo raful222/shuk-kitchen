@@ -53,25 +53,44 @@ export default function TodayTab({
   // 4-Person threshold rule: duty ONLY takes place when strictly > 4 attendees (>= 5)
   const isDutyActive = attendeeCount > 4;
 
-  // 1. Meat Plate / Tray calculation:
-  const portionsPerPlate = dailyMenu.portionsPerPlate || 3;
-  const rawPlatesNeeded = attendeeCount > 0 ? (attendeeCount / portionsPerPlate) : 0;
-  const roundedPlates = Math.ceil(rawPlatesNeeded * 2) / 2;
-  const approxKg = (roundedPlates * 0.9).toFixed(1);
+  // Diners headcount for meal portions:
+  // If attendeeCount > 0, use it. If 0 (e.g. non-mandatory day / not checked yet), default to members count (or 7).
+  const defaultDiners = attendeeCount > 0 ? attendeeCount : (members.length > 0 ? members.length : 7);
+  const [customDiners, setCustomDiners] = useState(null);
+  const effectiveDinerCount = customDiners !== null ? customDiners : defaultDiners;
 
-  // 2. Side Dish Package calculation:
-  // Allowed side dishes: 'chips' | 'rice' | 'couscous' | 'bulgur'
+  // 1. Meat Tray calculation:
+  // User Rule: 1 tray serves 3 to 4 people (~250-300 grams per person).
+  // Default portionsPerPlate: 3.5 (standard midway between 3 and 4)
+  const portionsPerPlate = dailyMenu.portionsPerPlate || 3.5;
+  const rawPlatesNeeded = effectiveDinerCount / portionsPerPlate;
+  const roundedPlates = Math.ceil(rawPlatesNeeded * 2) / 2; // e.g. 7 / 3.5 = 2.0 trays
+  const approxGramsPerPerson = Math.round(950 / portionsPerPlate); // ~270g per person
+  const totalGrams = Math.round(roundedPlates * 950);
+  const approxKg = (totalGrams / 1000).toFixed(1);
+
+  // 2. Side Dish calculations:
   const currentSideKey = dailyMenu.side || 'rice';
   const currentSideConfig = SIDE_DISH_CONFIG[currentSideKey] || SIDE_DISH_CONFIG.rice;
-  const servingsPerPackage = dailyMenu.sideServingsPerPackage || currentSideConfig.servingsPerPackage || 4;
-  const rawPackagesNeeded = attendeeCount > 0 ? (attendeeCount / servingsPerPackage) : 0;
-  const roundedPackages = Math.ceil(rawPackagesNeeded * 2) / 2;
 
-  // Exact rice & grains cup calculations:
-  // User Rule: default for 7 people = 2.5 cups of rice. Ratio 1:2 for boiling water.
-  const riceCupsRaw = attendeeCount > 0 ? (attendeeCount * (2.5 / 7)) : 0;
+  // Rice: exact user rule: 7 people = 2.5 cups of rice. Water 1:2.
+  const riceCupsRaw = effectiveDinerCount * (2.5 / 7);
   const displayRiceCups = Math.max(0.5, Math.round(riceCupsRaw * 2) / 2);
   const displayWaterCups = (displayRiceCups * 2).toFixed(1);
+
+  // Bulgur: exact same cup ratio as rice, 20 mins microwave
+  const displayBulgurCups = displayRiceCups;
+  const displayBulgurWaterCups = displayWaterCups;
+
+  // Couscous: 350g bags (serves 3.5 people per bag). For 7 people = 2 bags (4 cups boiling water).
+  const rawCouscousBags = effectiveDinerCount / 3.5;
+  const displayCouscousBags = Math.max(1, Math.ceil(rawCouscousBags));
+  const displayCouscousWaterCups = displayCouscousBags * 2;
+
+  // Chips: 1.5kg bags steak fries (serves 3.5-4 people per bag). For 7 people = 2 bags (~3kg).
+  const rawChipsBags = effectiveDinerCount / 3.5;
+  const displayChipsBags = Math.max(1, Math.ceil(rawChipsBags * 2) / 2);
+  const displayChipsKg = (displayChipsBags * 1.5).toFixed(1);
 
   // Check if any of today's cooks is absent (only relevant if duty is active)
   const absentCooks = isDutyActive ? assignedCooks.filter(cook => !getIsAttendingToday(cook.id)) : [];
@@ -313,17 +332,37 @@ export default function TodayTab({
       <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/80 space-y-5">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center font-bold">
               <UtensilsCrossed className="w-4 h-4" />
             </div>
             <div>
               <h3 className="font-extrabold text-sm text-slate-800">מה מבשלים היום?</h3>
-              <p className="text-[11px] text-slate-500">חישוב כמויות לפי פלטות בשר וחבילות תוספת</p>
+              <p className="text-[11px] text-slate-500">חישוב כמויות מדויק לפי סועדים וכוסות</p>
             </div>
           </div>
-          <span className="text-xs bg-slate-100 text-slate-700 font-bold px-2.5 py-1 rounded-full">
-            {attendeeCount} סועדים
-          </span>
+
+          {/* Diners Count Interactive Stepper */}
+          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setCustomDiners(Math.max(1, effectiveDinerCount - 1))}
+              className="w-6 h-6 rounded-lg bg-white shadow-2xs font-black text-slate-700 flex items-center justify-center hover:bg-slate-200 active:scale-95 text-xs"
+              title="הפחת סועד"
+            >
+              -
+            </button>
+            <span className="text-xs font-black text-orange-700 px-1.5">
+              {effectiveDinerCount} סועדים
+            </span>
+            <button
+              type="button"
+              onClick={() => setCustomDiners(effectiveDinerCount + 1)}
+              className="w-6 h-6 rounded-lg bg-white shadow-2xs font-black text-slate-700 flex items-center justify-center hover:bg-slate-200 active:scale-95 text-xs"
+              title="הוסף סועד"
+            >
+              +
+            </button>
+          </div>
         </div>
 
         {/* 1. MEAT SELECTION & TRAY CALCULATOR */}
@@ -351,24 +390,55 @@ export default function TodayTab({
           </div>
 
           {/* Meat Tray Result */}
-          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-orange-200 rounded-2xl p-3 flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs text-slate-700 font-semibold">
-              <Layers className="w-4 h-4 text-orange-600" />
-              <span>פלטות בשר להפשרה:</span>
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-orange-200 rounded-2xl p-3.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs text-slate-800 font-extrabold">
+                <Layers className="w-4 h-4 text-orange-600" />
+                <span>מגשי בשר (פלטות) להפשרה:</span>
+              </div>
+              <div className="text-left">
+                <span className="text-2xl font-black text-orange-700">{roundedPlates}</span>
+                <span className="text-xs font-bold text-orange-700 mr-1">מגשים</span>
+              </div>
             </div>
-            <div className="text-left">
-              <span className="text-xl font-black text-orange-700">{roundedPlates}</span>
-              <span className="text-xs font-bold text-orange-700 mr-1">פלטות</span>
-              <span className="text-[10px] text-slate-500 mr-1">(~{approxKg} ק"ג)</span>
+
+            <div className="flex items-center justify-between text-[11px] text-slate-600 border-t border-orange-200/60 pt-2 font-medium">
+              <span>משקל משוער: <strong>~{approxKg} ק"ג</strong></span>
+              <span>מנה לסועד: <strong>~{approxGramsPerPerson} גרם</strong> (מגש ל-{portionsPerPlate} איש)</span>
+            </div>
+
+            {/* Meat Portions Stepper */}
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[10px] text-slate-500 font-bold">גודל מנה מועדף:</span>
+              <div className="flex items-center gap-1">
+                {[
+                  { val: 4, label: 'מגש ל-4 (~240 גרם)' },
+                  { val: 3.5, label: 'סטנדרט (מגש ל-3.5)' },
+                  { val: 3, label: 'נדיב (מגש ל-3)' },
+                ].map(opt => (
+                  <button
+                    key={opt.val}
+                    type="button"
+                    onClick={() => onUpdateDailyMenu({ ...dailyMenu, portionsPerPlate: opt.val })}
+                    className={`text-[10px] px-2 py-0.5 rounded-lg font-bold border transition ${
+                      portionsPerPlate === opt.val
+                        ? 'bg-orange-600 text-white border-orange-600 shadow-2xs'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* 2. SIDE DISH SELECTION & PACKAGE CALCULATOR */}
+        {/* 2. SIDE DISH SELECTION & EXACT PORTIONS */}
         <div className="space-y-2.5 pt-2 border-t border-slate-100">
           <div className="flex items-center justify-between">
             <label className="block text-xs font-bold text-slate-700">2. תוספת בצד (צ'יפס, אורז, קוסקוס, בורגול):</label>
-            <span className="text-[10px] text-slate-400">לפי חבילות / שקיות</span>
+            <span className="text-[10px] text-slate-400">בחר תוספת להיום</span>
           </div>
 
           <div className="grid grid-cols-4 gap-1.5">
@@ -388,133 +458,148 @@ export default function TodayTab({
             ))}
           </div>
 
-          {/* Side Dish Package Result Box */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-3.5 space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-blue-900 flex items-center gap-1.5">
-                <Package className="w-4 h-4 text-blue-600" />
-                <span>כמה {currentSideConfig.unit} {currentSideConfig.label} להכין?</span>
-              </span>
-
-              {/* Adjust ratio stepper */}
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] text-slate-500">סועדים לחבילה:</span>
-                {[3, 4, 5, 6].map(num => (
-                  <button
-                    key={num}
-                    onClick={() => onUpdateDailyMenu({ ...dailyMenu, sideServingsPerPackage: num })}
-                    className={`text-[10px] w-5 h-5 rounded-md font-bold flex items-center justify-center ${
-                      servingsPerPackage === num
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-slate-600 border border-slate-200'
-                    }`}
-                  >
-                    {num}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-baseline justify-between pt-1">
-              <span className="text-xs text-slate-600">
-                {attendeeCount} סועדים × יחס של {servingsPerPackage} סועדים ל{currentSideConfig.unit === 'שקיות' ? 'שקית' : 'חבילה'}
-              </span>
-              <div className="text-left">
-                <span className="text-2xl font-black text-blue-700">{roundedPackages}</span>
-                <span className="text-xs font-bold text-blue-700 mr-1">{currentSideConfig.unit}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 🍚 EXACT CUPS & MICROWAVE TIMES CALLOUT (ACCORDING TO USER'S EXACT RULES) */}
-          <div className="p-3 bg-amber-50/70 border border-amber-200/90 rounded-2xl space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-black text-xs text-amber-950 flex items-center gap-1.5">
-                <span>{currentSideConfig.icon}</span>
-                <span>
-                  {currentSideKey === 'rice' && 'כמויות מדויקות לאורז (בסיר / מיקרו):'}
-                  {currentSideKey === 'bulgur' && 'כמויות מדויקות לבורגול במיקרו:'}
-                  {currentSideKey === 'couscous' && 'הכנה מהירה לקוסקוס (ללא בישול!):'}
-                  {currentSideKey === 'chips' && 'הוראות אפייה לצ\'יפס סטייק:'}
+          {/* 🍚 RICE EXACT CARD */}
+          {currentSideKey === 'rice' && (
+            <div className="p-3.5 bg-amber-50/80 border border-amber-300 rounded-2xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-black text-xs text-amber-950 flex items-center gap-1.5">
+                  <span>🍚</span>
+                  <span>כמות אורז מומלצת להיום ({effectiveDinerCount} סועדים):</span>
                 </span>
-              </span>
-              <span className="text-[10px] bg-amber-200/80 text-amber-900 font-bold px-2 py-0.5 rounded-full">
-                ⏱️ {currentSideConfig.cookMethod}
-              </span>
+                <span className="text-[10px] bg-amber-200/80 text-amber-900 font-bold px-2 py-0.5 rounded-full">
+                  ⏱️ 15 דק' במיקרו / סיר
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="p-2 bg-white rounded-xl border border-amber-200 shadow-2xs">
+                  <span className="text-[10px] text-slate-500 block font-semibold">אורז למדוד:</span>
+                  <span className="text-xl font-black text-orange-700">{displayRiceCups}</span>
+                  <span className="text-xs font-bold text-orange-700 mr-1">כוסות</span>
+                </div>
+                <div className="p-2 bg-white rounded-xl border border-blue-200 shadow-2xs">
+                  <span className="text-[10px] text-slate-500 block font-semibold">מים רותחים (1 ל-2):</span>
+                  <span className="text-xl font-black text-blue-700">{displayWaterCups}</span>
+                  <span className="text-xs font-bold text-blue-700 mr-1">כוסות</span>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-amber-900 leading-relaxed font-medium pt-0.5">
+                💡 <strong>כלל:</strong> ברירת מחדל ל-7 אנשים = 2.5 כוסות אורז + 5 כוסות מים רותחים (כחצי שקית 1 ק"ג).
+                <br />
+                🧂 <strong>תיבול:</strong> קצת שמן, מלח, פלפל שחור (מרק עוף – לא חייב / אופציונלי).
+              </div>
             </div>
+          )}
 
-            {currentSideKey === 'rice' && (
-              <div className="text-xs text-amber-900 space-y-1">
-                <div className="flex items-center justify-between font-bold">
-                  <span>כמות אורז מומלצת להיום ({attendeeCount} סועדים):</span>
-                  <span className="text-orange-700 text-sm">{displayRiceCups} כוסות אורז</span>
-                </div>
-                <div className="flex items-center justify-between font-bold">
-                  <span>מים רותחים (יחס 1 ל-2):</span>
-                  <span className="text-blue-700 text-sm">{displayWaterCups} כוסות מים</span>
-                </div>
-                <p className="text-[11px] text-amber-800 pt-1">
-                  🧂 <strong>תיבול:</strong> קצת שמן, מלח, פלפל שחור (מרק עוף – לא חייב / אופציונלי).
-                </p>
-                <p className="text-[11px] text-slate-500">
-                  * מחושב לפי ברירת המחדל המדויקת שלכם: 2.5 כוסות אורז ל-7 אנשים.
-                </p>
+          {/* 🌾 BULGUR EXACT CARD */}
+          {currentSideKey === 'bulgur' && (
+            <div className="p-3.5 bg-amber-50/80 border border-amber-300 rounded-2xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-black text-xs text-amber-950 flex items-center gap-1.5">
+                  <span>🌾</span>
+                  <span>כמות בורגול מומלצת להיום ({effectiveDinerCount} סועדים):</span>
+                </span>
+                <span className="text-[10px] bg-amber-200/80 text-amber-900 font-bold px-2 py-0.5 rounded-full">
+                  ⏱️ 20 דק' במיקרו
+                </span>
               </div>
-            )}
 
-            {currentSideKey === 'bulgur' && (
-              <div className="text-xs text-amber-900 space-y-1">
-                <div className="flex items-center justify-between font-bold">
-                  <span>כמות בורגול להיום ({attendeeCount} סועדים):</span>
-                  <span className="text-amber-800 text-sm">{displayRiceCups} כוסות בורגול</span>
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="p-2 bg-white rounded-xl border border-amber-200 shadow-2xs">
+                  <span className="text-[10px] text-slate-500 block font-semibold">בורגול למדוד:</span>
+                  <span className="text-xl font-black text-amber-800">{displayBulgurCups}</span>
+                  <span className="text-xs font-bold text-amber-800 mr-1">כוסות</span>
                 </div>
-                <div className="flex items-center justify-between font-bold">
-                  <span>מים רותחים (יחס 1 ל-2):</span>
-                  <span className="text-blue-700 text-sm">{displayWaterCups} כוסות מים</span>
+                <div className="p-2 bg-white rounded-xl border border-blue-200 shadow-2xs">
+                  <span className="text-[10px] text-slate-500 block font-semibold">מים רותחים (1 ל-2):</span>
+                  <span className="text-xl font-black text-blue-700">{displayBulgurWaterCups}</span>
+                  <span className="text-xs font-bold text-blue-700 mr-1">כוסות</span>
                 </div>
-                <p className="text-[11px] text-amber-800 pt-1">
-                  🧂 <strong>תיבול:</strong> שמן ומלח בנדיבות • <strong>20 דקות במיקרוגל</strong> בכלי מתאים מכוסה חלקית.
-                </p>
               </div>
-            )}
 
-            {currentSideKey === 'couscous' && (
-              <div className="text-xs text-amber-900 space-y-1">
-                <div className="flex items-center justify-between font-bold">
-                  <span>שקיות קוסקוס (350 גרם):</span>
-                  <span className="text-amber-800 text-sm">{roundedPackages} שקיות</span>
-                </div>
-                <div className="flex items-center justify-between font-bold">
-                  <span>מים רותחים:</span>
-                  <span className="text-blue-700 text-sm">{roundedPackages * 2} כוסות מים</span>
-                </div>
-                <p className="text-[11px] text-amber-800 pt-1">
-                  🥣 <strong>מתכון פשוט:</strong> מערבבים קוסקוס יבש עם 2-3 כפות שמן, מלח וכורכום, שופכים מים רותחים, מכסים 6 דקות ומאווררים במזלג!
-                </p>
+              <div className="text-[11px] text-amber-900 leading-relaxed font-medium pt-0.5">
+                💡 <strong>כלל:</strong> יחס 1:2 מים (2.5 כוסות בורגול + 5 כוסות מים ל-7 סועדים). 20 דקות במיקרוגל.
+                <br />
+                🧂 <strong>תיבול:</strong> שמן ומלח בנדיבות.
               </div>
-            )}
+            </div>
+          )}
 
-            {currentSideKey === 'chips' && (
-              <div className="text-xs text-amber-900 space-y-1">
-                <div className="flex items-center justify-between font-bold">
-                  <span>שקיות צ'יפס (1.5 ק"ג עבה):</span>
-                  <span className="text-orange-700 text-sm">{roundedPackages} שקיות</span>
-                </div>
-                <p className="text-[11px] text-amber-800 pt-1">
-                  🍟 <strong>הכנה:</strong> 20-25 דקות בתנור / נינג'ה על 200 מעלות עם מעט שמן ומלח.
-                </p>
+          {/* 🥣 COUSCOUS EXACT CARD */}
+          {currentSideKey === 'couscous' && (
+            <div className="p-3.5 bg-amber-50/80 border border-amber-300 rounded-2xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-black text-xs text-amber-950 flex items-center gap-1.5">
+                  <span>🥣</span>
+                  <span>קוסקוס מהיר להיום ({effectiveDinerCount} סועדים):</span>
+                </span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-900 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                  ⚡ ללא בישול! 6 דק'
+                </span>
               </div>
-            )}
 
-            <button
-              type="button"
-              onClick={() => { setRecipeTab(currentSideKey); setShowRecipeModal(true); }}
-              className="w-full mt-1.5 py-1.5 px-2.5 bg-white hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl border border-amber-300 flex items-center justify-center gap-1.5 transition active:scale-95 shadow-2xs"
-            >
-              <BookOpen className="w-3.5 h-3.5 text-amber-700" />
-              <span>פתח מתכון מלא והוראות הכנה צעד-אחר-צעד 📖</span>
-            </button>
-          </div>
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="p-2 bg-white rounded-xl border border-amber-200 shadow-2xs">
+                  <span className="text-[10px] text-slate-500 block font-semibold">שקיות קוסקוס (350 גרם):</span>
+                  <span className="text-xl font-black text-amber-800">{displayCouscousBags}</span>
+                  <span className="text-xs font-bold text-amber-800 mr-1">שקיות</span>
+                </div>
+                <div className="p-2 bg-white rounded-xl border border-blue-200 shadow-2xs">
+                  <span className="text-[10px] text-slate-500 block font-semibold">מים רותחים:</span>
+                  <span className="text-xl font-black text-blue-700">{displayCouscousWaterCups}</span>
+                  <span className="text-xs font-bold text-blue-700 mr-1">כוסות</span>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-amber-900 leading-relaxed font-medium pt-0.5">
+                🥣 <strong>הכנה פשוטה:</strong> מערבבים את הקוסקוס היבש עם 2-3 כפות שמן ומלח, מוזגים מים רותחים, מכסים 6 דקות ומפוררים במזלג!
+              </div>
+            </div>
+          )}
+
+          {/* 🍟 CHIPS EXACT CARD */}
+          {currentSideKey === 'chips' && (
+            <div className="p-3.5 bg-amber-50/80 border border-amber-300 rounded-2xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-black text-xs text-amber-950 flex items-center gap-1.5">
+                  <span>🍟</span>
+                  <span>צ'יפס סטייק להיום ({effectiveDinerCount} סועדים):</span>
+                </span>
+                <span className="text-[10px] bg-amber-200/80 text-amber-900 font-bold px-2 py-0.5 rounded-full">
+                  ⏱️ 20-25 דק' בתנור
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="p-2 bg-white rounded-xl border border-amber-200 shadow-2xs">
+                  <span className="text-[10px] text-slate-500 block font-semibold">שקיות צ'יפס (1.5 ק"ג):</span>
+                  <span className="text-xl font-black text-orange-700">{displayChipsBags}</span>
+                  <span className="text-xs font-bold text-orange-700 mr-1">שקיות</span>
+                </div>
+                <div className="p-2 bg-white rounded-xl border border-amber-200 shadow-2xs">
+                  <span className="text-[10px] text-slate-500 block font-semibold">משקל משוער:</span>
+                  <span className="text-xl font-black text-slate-800">~{displayChipsKg}</span>
+                  <span className="text-xs font-bold text-slate-700 mr-1">ק"ג</span>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-amber-900 leading-relaxed font-medium pt-0.5">
+                🍟 <strong>הכנה:</strong> 20-25 דקות בתנור / נינג'ה גריל על 200 מעלות עם מעט ספריי שמן ומלח דק.
+              </div>
+            </div>
+          )}
+
+          {/* Open Full Recipe Button */}
+          <button
+            type="button"
+            onClick={() => { setRecipeTab(currentSideKey); setShowRecipeModal(true); }}
+            className="w-full mt-1 py-2 px-3 bg-white hover:bg-amber-50 text-amber-950 font-extrabold text-xs rounded-2xl border border-amber-300 flex items-center justify-center gap-1.5 transition active:scale-95 shadow-2xs"
+          >
+            <BookOpen className="w-4 h-4 text-amber-700" />
+            <span>מתכון והוראות הכנה מפורטות ל{currentSideConfig.label} 📖</span>
+          </button>
+        </div>
 
           {/* Additional note / extra side */}
           <div>
@@ -527,7 +612,6 @@ export default function TodayTab({
             />
           </div>
         </div>
-      </div>
 
       {/* 👥 CARD: TODAY'S ATTENDANCE IN OFFICE */}
       {members.length > 0 && (
@@ -679,49 +763,49 @@ export default function TodayTab({
                   <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5 text-xs">
                     <h4 className="font-extrabold text-slate-800 flex items-center gap-1">
                       <span>📏</span>
-                      <span>כמויות מדויקות להיום ({attendeeCount} סועדים):</span>
+                      <span>כמויות מדויקות מחושבות ({effectiveDinerCount} סועדים):</span>
                     </h4>
                     {recipeTab === 'rice' && (
                       <div className="space-y-1 text-slate-700 text-xs">
                         <div className="flex items-center justify-between font-bold text-orange-700">
-                          <span>אורז:</span>
+                          <span>אורז למדידה:</span>
                           <span>{displayRiceCups} כוסות (מפתח 2.5 כוסות ל-7 איש)</span>
                         </div>
                         <div className="flex items-center justify-between font-bold text-blue-700">
                           <span>מים רותחים (יחס 1:2):</span>
-                          <span>{displayWaterCups} כוסות מים</span>
+                          <span>{displayWaterCups} כוסות מים רותחים</span>
                         </div>
                       </div>
                     )}
                     {recipeTab === 'bulgur' && (
                       <div className="space-y-1 text-slate-700 text-xs">
                         <div className="flex items-center justify-between font-bold text-amber-800">
-                          <span>בורגול:</span>
-                          <span>{displayRiceCups} כוסות</span>
+                          <span>בורגול למדידה:</span>
+                          <span>{displayBulgurCups} כוסות</span>
                         </div>
                         <div className="flex items-center justify-between font-bold text-blue-700">
                           <span>מים רותחים (יחס 1:2):</span>
-                          <span>{displayWaterCups} כוסות מים</span>
+                          <span>{displayBulgurWaterCups} כוסות מים רותחים</span>
                         </div>
                       </div>
                     )}
                     {recipeTab === 'couscous' && (
                       <div className="space-y-1 text-slate-700 text-xs">
                         <div className="flex items-center justify-between font-bold text-amber-800">
-                          <span>קוסקוס מהיר:</span>
-                          <span>{roundedPackages} שקיות (350 גרם כ"א)</span>
+                          <span>קוסקוס מהיר (350 גרם):</span>
+                          <span>{displayCouscousBags} שקיות</span>
                         </div>
                         <div className="flex items-center justify-between font-bold text-blue-700">
                           <span>מים רותחים:</span>
-                          <span>{roundedPackages * 2} כוסות מים רותחים</span>
+                          <span>{displayCouscousWaterCups} כוסות מים רותחים</span>
                         </div>
                       </div>
                     )}
                     {recipeTab === 'chips' && (
                       <div className="space-y-1 text-slate-700 text-xs">
                         <div className="flex items-center justify-between font-bold text-orange-700">
-                          <span>צ'יפס סטייק עבה:</span>
-                          <span>{roundedPackages} שקיות (1.5 ק"ג כ"א)</span>
+                          <span>צ'יפס סטייק עבה (1.5 ק"ג):</span>
+                          <span>{displayChipsBags} שקיות (~{displayChipsKg} ק"ג)</span>
                         </div>
                       </div>
                     )}

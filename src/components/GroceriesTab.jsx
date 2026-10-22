@@ -43,11 +43,29 @@ export default function GroceriesTab({
     ? products 
     : products.filter(p => p.category === activeCategory);
 
+  const [plainCopied, setPlainCopied] = useState(false);
+  const [showShukApiNotice, setShowShukApiNotice] = useState(false);
+
   const handleCopyWhatsApp = () => {
     const text = generateWhatsAppShoppingList(products, dailyMenu, todayAttendeesCount);
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleCopyPlainList = () => {
+    if (itemsToBuy.length === 0) {
+      alert('אין מוצרים חסרים להזמנה כרגע!');
+      return;
+    }
+    let text = `🛒 רשימת הזמנה למחסני השוק (${itemsToBuy.length} פריטים):\n`;
+    itemsToBuy.forEach(item => {
+      const qty = item.requiredStock - item.currentStock;
+      text += `• ${item.name}: להזמין ${qty} ${item.unit}\n`;
+    });
+    navigator.clipboard.writeText(text);
+    setPlainCopied(true);
+    setTimeout(() => setPlainCopied(false), 2500);
   };
 
   const handleAddNewProduct = (e) => {
@@ -86,16 +104,40 @@ export default function GroceriesTab({
             </div>
           </div>
 
-          <a
-            href="https://www.mck.co.il"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white text-xs font-bold px-2.5 py-1.5 rounded-full border border-white/20 transition active:scale-95"
-          >
-            <span>אתר השוק</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setShowShukApiNotice(!showShukApiNotice)}
+              className="bg-black/20 hover:bg-black/30 text-white text-[10px] font-bold px-2 py-1.5 rounded-full border border-white/20"
+              title="הסבר על חיבור אוטומטי לעגלת השוק"
+            >
+              איך מזמינים? 💡
+            </button>
+            <a
+              href="https://www.mck.co.il"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white text-xs font-bold px-2.5 py-1.5 rounded-full border border-white/20 transition active:scale-95"
+            >
+              <span>אתר השוק</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
         </div>
+
+        {/* Info on how supermarket cart integration works */}
+        {showShukApiNotice && (
+          <div className="bg-black/30 backdrop-blur-md rounded-2xl p-3 text-[11px] text-orange-100 space-y-1.5 border border-white/20">
+            <div className="font-bold text-amber-200">
+              💡 למה אי אפשר להוסיף אוטומטית לסל במחסני השוק דרך API?
+            </div>
+            <p className="leading-relaxed">
+              אתרי הסופרמרקטים בישראל (מחסני השוק, שופרסל, ויקטורי) אינם מאפשרים לאפליקציה חיצונית להכניס מוצרים ישירות לעגלה הפרטית של הלקוח מטעמי אבטחת מידע, סייבר ודרישת התחברות אישית עם סיסמה.
+            </p>
+            <p className="leading-relaxed font-semibold text-white">
+              במקום זה הכנו לכם את הפתרון המושלם: לצד כל מוצר שחסר מופיע כפתור "חפש והוסף באתר השוק" שפותח מיד את דף המוצר להוספה מהירה, ובנוסף כפתור להעתקת רשימת ההזמנה בלחיצה אחת!
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2 pt-1">
           <div className="bg-black/20 backdrop-blur-sm rounded-2xl p-3">
@@ -111,27 +153,50 @@ export default function GroceriesTab({
           </div>
         </div>
 
-        {/* WhatsApp Export Button */}
-        <button
-          onClick={handleCopyWhatsApp}
-          className={`w-full py-3 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-98 ${
-            copied
-              ? 'bg-emerald-500 text-white'
-              : 'bg-white text-orange-700 hover:bg-orange-50'
-          }`}
-        >
-          {copied ? (
-            <>
-              <Check className="w-4 h-4 text-white" />
-              <span>הרשימה הועתקה! פתח וואטסאפ והדבק בקבוצה ✓</span>
-            </>
-          ) : (
-            <>
-              <Copy className="w-4 h-4 text-orange-600" />
-              <span>העתק רשימת קניות מנוסחת לוואטסאפ 📲</span>
-            </>
-          )}
-        </button>
+        {/* Action Buttons: WhatsApp & Plain Copy */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={handleCopyWhatsApp}
+            className={`py-2.5 px-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-98 ${
+              copied
+                ? 'bg-emerald-500 text-white'
+                : 'bg-white text-orange-700 hover:bg-orange-50'
+            }`}
+          >
+            {copied ? (
+              <>
+                <Check className="w-3.5 h-3.5" />
+                <span>הועתק לוואטסאפ ✓</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5 text-orange-600" />
+                <span>העתק לוואטסאפ 📲</span>
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={handleCopyPlainList}
+            className={`py-2.5 px-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-98 border border-white/30 ${
+              plainCopied
+                ? 'bg-emerald-500 text-white'
+                : 'bg-black/25 text-white hover:bg-black/35'
+            }`}
+          >
+            {plainCopied ? (
+              <>
+                <Check className="w-3.5 h-3.5" />
+                <span>הרשימה הועתקה!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5 text-orange-200" />
+                <span>העתק רשימת פריטים</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* CATEGORY FILTER TABS */}
@@ -233,6 +298,24 @@ export default function GroceriesTab({
                   </button>
                 </div>
               </div>
+
+              {/* Quick direct search link to Machsanei Hashuk if missing */}
+              {isMissing && (
+                <div className="mt-2.5 pt-2 border-t border-dashed border-orange-200 flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-orange-950 font-bold">
+                    חסר {qtyNeeded} {product.unit} להזמנה
+                  </span>
+                  <a
+                    href={`https://www.mck.co.il/search?q=${encodeURIComponent(product.name)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-300 rounded-xl text-[11px] font-extrabold transition active:scale-95 shadow-2xs"
+                  >
+                    <span>הוסף באתר השוק</span>
+                    <ExternalLink className="w-3 h-3 text-orange-700" />
+                  </a>
+                </div>
+              )}
             </div>
           );
         })}

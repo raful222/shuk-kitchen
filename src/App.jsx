@@ -341,6 +341,17 @@ export default function App() {
     broadcastToCloud({ expenses: updatedExpenses });
   };
 
+  const handleDeleteExpense = (expenseId) => {
+    const updatedExpenses = expenses.filter(e => e.id !== expenseId);
+    setExpenses(updatedExpenses);
+    broadcastToCloud({ expenses: updatedExpenses });
+  };
+
+  const handleClearAllExpenses = () => {
+    setExpenses([]);
+    broadcastToCloud({ expenses: [] });
+  };
+
   const handleAddDeposit = (newDeposit) => {
     const updatedDeposits = [newDeposit, ...deposits];
     setDeposits(updatedDeposits);
@@ -542,6 +553,8 @@ export default function App() {
             members={members}
             payboxLink={payboxLink}
             onAddExpense={handleAddExpense}
+            onDeleteExpense={handleDeleteExpense}
+            onClearAllExpenses={handleClearAllExpenses}
             onAddDeposit={handleAddDeposit}
             onAddWithdrawal={handleAddWithdrawal}
             onToggleMemberPayment={handleToggleMemberPayment}
