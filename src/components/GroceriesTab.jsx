@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { 
   ShoppingCart, ExternalLink, Copy, Check, Plus, Minus, 
-  Package, DollarSign, Sparkles, Filter, AlertCircle 
+  Package, DollarSign, Sparkles, Filter, AlertCircle,
+  Search, Zap, ChevronRight, ChevronLeft, X, RotateCcw, CheckSquare
 } from 'lucide-react';
 import { generateWhatsAppShoppingList } from '../utils/helpers';
 
 export default function GroceriesTab({
   products = [],
   onUpdateStock,
+  onResetAllStock,
   onAddProduct,
   dailyMenu = {},
   todayAttendeesCount = 0,
@@ -15,6 +17,9 @@ export default function GroceriesTab({
   const [activeCategory, setActiveCategory] = useState('all');
   const [copied, setCopied] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showOrderWizard, setShowOrderWizard] = useState(false);
+  const [wizardIndex, setWizardIndex] = useState(0);
+  const [checkedProductIds, setCheckedProductIds] = useState({});
 
   // New product form state
   const [newName, setNewName] = useState('');
@@ -43,6 +48,10 @@ export default function GroceriesTab({
     ? products 
     : products.filter(p => p.category === activeCategory);
 
+  const activeOrderList = itemsToBuy.length > 0 ? itemsToBuy : products;
+  const currentWizardItem = activeOrderList[wizardIndex] || activeOrderList[0];
+  const currentItemQty = currentWizardItem ? Math.max(1, currentWizardItem.requiredStock - currentWizardItem.currentStock) : 1;
+
   const [plainCopied, setPlainCopied] = useState(false);
   const [showShukApiNotice, setShowShukApiNotice] = useState(false);
 
@@ -66,6 +75,47 @@ export default function GroceriesTab({
     navigator.clipboard.writeText(text);
     setPlainCopied(true);
     setTimeout(() => setPlainCopied(false), 2500);
+  };
+
+  const handleOpenOrderWizard = () => {
+    let currentItems = itemsToBuy;
+    if (currentItems.length === 0) {
+      if (window.confirm('אין כרגע מוצרים חסרים להזמנה במלאי. האם לסמן את כל המוצרים הקבועים להזמנה שבועית חדשה?')) {
+        onResetAllStock && onResetAllStock('zero');
+      } else {
+        return;
+      }
+    }
+
+    // Copy formatted list to clipboard
+    let text = `🛒 רשימת הזמנה למחסני השוק (${itemsToBuy.length || products.length} פריטים):\n`;
+    (itemsToBuy.length > 0 ? itemsToBuy : products).forEach(item => {
+      const qty = Math.max(1, item.requiredStock - item.currentStock);
+      text += `• ${item.name}: להזמין ${qty} ${item.unit}\n`;
+    });
+    navigator.clipboard.writeText(text);
+    setPlainCopied(true);
+    setTimeout(() => setPlainCopied(false), 2500);
+
+    setWizardIndex(0);
+    setShowOrderWizard(true);
+  };
+
+  const handleOpenAllShukTabs = () => {
+    const list = itemsToBuy.length > 0 ? itemsToBuy : products;
+    if (list.length === 0) return;
+    list.forEach((item, idx) => {
+      setTimeout(() => {
+        window.open(`https://www.mck.co.il/search?q=${encodeURIComponent(item.name)}`, '_blank');
+      }, idx * 180);
+    });
+  };
+
+  const toggleItemChecked = (id) => {
+    setCheckedProductIds(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
   };
 
   const handleAddNewProduct = (e) => {
@@ -153,6 +203,16 @@ export default function GroceriesTab({
           </div>
         </div>
 
+        {/* Primary Action: Add all list & Open Shuk */}
+        <button
+          type="button"
+          onClick={handleOpenOrderWizard}
+          className="w-full py-3 px-4 bg-white hover:bg-amber-50 text-orange-950 font-black text-xs sm:text-sm rounded-2xl shadow-lg flex items-center justify-center gap-2 transition active:scale-98 border-2 border-white/90"
+        >
+          <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
+          <span>⚡ פתח את כל הרשימה במחסני השוק 🛒</span>
+        </button>
+
         {/* Action Buttons: WhatsApp & Plain Copy */}
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -160,7 +220,7 @@ export default function GroceriesTab({
             className={`py-2.5 px-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-98 ${
               copied
                 ? 'bg-emerald-500 text-white'
-                : 'bg-white text-orange-700 hover:bg-orange-50'
+                : 'bg-white/20 hover:bg-white/30 text-white border border-white/30'
             }`}
           >
             {copied ? (
@@ -170,7 +230,7 @@ export default function GroceriesTab({
               </>
             ) : (
               <>
-                <Copy className="w-3.5 h-3.5 text-orange-600" />
+                <Copy className="w-3.5 h-3.5 text-orange-200" />
                 <span>העתק לוואטסאפ 📲</span>
               </>
             )}
@@ -197,6 +257,36 @@ export default function GroceriesTab({
             )}
           </button>
         </div>
+      </div>
+
+      {/* 🔄 STOCK CONTROLS: Add all to order or reset */}
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('האם לסמן את כל המוצרים הקבועים כחסרים להזמנה שבועית חדשה (איפוס מלאי ל-0)?')) {
+              onResetAllStock && onResetAllStock('zero');
+            }
+          }}
+          className="flex-1 py-1.5 px-2 bg-orange-100 hover:bg-orange-200 text-orange-900 border border-orange-200 rounded-xl text-[11px] font-extrabold flex items-center justify-center gap-1 transition active:scale-95 shadow-2xs"
+          title="כל המוצרים הקבועים ייכנסו לרשימת ההזמנה"
+        >
+          <span>➕ סמן את כל הרשימה להזמנה</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('האם לסמן שכל המוצרים קיימים במלואם במלאי?')) {
+              onResetAllStock && onResetAllStock('full');
+            }
+          }}
+          className="py-1.5 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 transition active:scale-95 shadow-2xs"
+          title="אפס למלאי מלא"
+        >
+          <RotateCcw className="w-3 h-3 text-slate-500" />
+          <span>סמן שהכל במלאי</span>
+        </button>
       </div>
 
       {/* CATEGORY FILTER TABS */}
@@ -413,6 +503,201 @@ export default function GroceriesTab({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🚀 QUICK SHUK ORDER WIZARD MODAL */}
+      {showOrderWizard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🛒</span>
+                <div>
+                  <h3 className="font-black text-sm text-slate-800">אשף הזמנה למחסני השוק</h3>
+                  <p className="text-[11px] text-slate-500">{activeOrderList.length} מוצרים ברשימת ההזמנה</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOrderWizard(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Notification that list is copied */}
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-2.5 flex items-center gap-2 text-xs text-emerald-800 font-bold">
+              <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>כל רשימת המוצרים והכמויות הועתקה ללוח! 📋</span>
+            </div>
+
+            {/* Quick action buttons */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-extrabold text-slate-700 block">
+                פתיחה בלחיצה אחת:
+              </span>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href="https://www.mck.co.il"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-3 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-center font-bold text-xs shadow-md transition active:scale-95 flex flex-col items-center justify-center gap-1.5"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>פתח אתר מחסני השוק</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={handleOpenAllShukTabs}
+                  className="p-3 bg-slate-800 hover:bg-slate-900 text-white rounded-2xl text-center font-bold text-xs shadow-md transition active:scale-95 flex flex-col items-center justify-center gap-1.5"
+                >
+                  <Zap className="w-4 h-4 text-amber-400" />
+                  <span>פתח הכל בטאבים 🚀</span>
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-tight">
+                * כפתור "פתח הכל": פותח את עמודי החיפוש של כל המוצרים בטאבים נפרדים (אשר חלונות קופצים בדפדפן במידה ומופיעה הודעה).
+              </p>
+            </div>
+
+            {/* Step-by-step assistant */}
+            {currentWizardItem && (
+              <div className="p-3.5 bg-amber-50/70 border-2 border-amber-300 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-extrabold text-amber-950">
+                    מוצר {wizardIndex + 1} מתוך {activeOrderList.length}:
+                  </span>
+                  <span className="text-[10px] bg-amber-200/80 text-amber-900 font-black px-2 py-0.5 rounded-full">
+                    {Math.round(((wizardIndex + 1) / activeOrderList.length) * 100)}%
+                  </span>
+                </div>
+
+                <div className="bg-white rounded-xl p-3 border border-amber-200 shadow-2xs space-y-1">
+                  <h4 className="font-black text-xs text-slate-800 leading-snug">
+                    {currentWizardItem.name}
+                  </h4>
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    <span className="font-black text-orange-700">
+                      כמות להזמין: {currentItemQty} {currentWizardItem.unit}
+                    </span>
+                    <span className="text-slate-500 font-medium">
+                      ~{Math.round(currentItemQty * currentWizardItem.pricePerUnit)} ₪
+                    </span>
+                  </div>
+                  {currentWizardItem.shukNote && (
+                    <p className="text-[10px] text-slate-500 italic mt-0.5">
+                      {currentWizardItem.shukNote}
+                    </p>
+                  )}
+                </div>
+
+                {/* Direct search link */}
+                <a
+                  href={`https://www.mck.co.il/search?q=${encodeURIComponent(currentWizardItem.name)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black text-xs flex items-center justify-center gap-1.5 shadow transition active:scale-95"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  <span>חפש והוסף לסל באתר השוק ↗️</span>
+                </a>
+
+                {/* Navigation and item checkmark */}
+                <div className="flex items-center justify-between gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    disabled={wizardIndex === 0}
+                    onClick={() => setWizardIndex(prev => Math.max(0, prev - 1))}
+                    className="flex-1 py-1.5 px-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 disabled:opacity-30 flex items-center justify-center gap-1"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                    <span>הקודם</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleItemChecked(currentWizardItem.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 border ${
+                      checkedProductIds[currentWizardItem.id]
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Check className="w-3 h-3" />
+                    <span>{checkedProductIds[currentWizardItem.id] ? 'סומן ✓' : 'סמן שהוספת'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={wizardIndex >= activeOrderList.length - 1}
+                    onClick={() => setWizardIndex(prev => Math.min(activeOrderList.length - 1, prev + 1))}
+                    className="flex-1 py-1.5 px-2 bg-slate-900 text-white rounded-xl text-xs font-bold disabled:opacity-30 flex items-center justify-center gap-1"
+                  >
+                    <span>הבא</span>
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Checklist of all items */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[11px] font-extrabold text-slate-700 block">
+                כל הפריטים ברשימה ({activeOrderList.length}):
+              </span>
+              <div className="max-h-36 overflow-y-auto space-y-1 bg-slate-50 p-2 rounded-xl border border-slate-200 text-xs">
+                {activeOrderList.map((item, idx) => {
+                  const qty = Math.max(1, item.requiredStock - item.currentStock);
+                  const isChecked = !!checkedProductIds[item.id];
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => setWizardIndex(idx)}
+                      className={`p-1.5 rounded-lg flex items-center justify-between cursor-pointer transition ${
+                        wizardIndex === idx ? 'bg-orange-100 font-bold text-orange-950' : 'hover:bg-white text-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleItemChecked(item.id); }}
+                          className={`w-4 h-4 rounded flex items-center justify-center text-[10px] ${
+                            isChecked ? 'bg-emerald-600 text-white font-bold' : 'border border-slate-400'
+                          }`}
+                        >
+                          {isChecked ? '✓' : ''}
+                        </button>
+                        <span className={`truncate text-[11px] ${isChecked ? 'line-through text-slate-400' : ''}`}>
+                          {item.name}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold text-orange-800 shrink-0 mr-1">
+                        {qty} {item.unit}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowOrderWizard(false)}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition"
+              >
+                סגור אשף הזמנה
+              </button>
+            </div>
+
           </div>
         </div>
       )}
