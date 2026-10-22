@@ -1,12 +1,14 @@
 import { inflate } from 'pako';
+import { INITIAL_PRODUCTS } from '../data/initialData';
 
 /**
  * Parses a supermarket receipt or invoice PDF in the browser.
- * Extracts the total payment amount, store name, customer/payer, and items count.
+ * Extracts the total payment amount, store name, customer/payer, items count,
+ * and individual line items with quantities.
  * 
  * @param {ArrayBuffer|Uint8Array} buffer 
  * @param {Array} members List of team members to match by phone or name
- * @returns {Object} { amount, store, payer, itemsCount, description, rawText }
+ * @returns {Object} { amount, store, payer, itemsCount, description, parsedItems, rawText }
  */
 export function parseReceiptPdf(buffer, members = []) {
   try {
@@ -135,7 +137,20 @@ export function parseReceiptPdf(buffer, members = []) {
       detectedPayer = eliMember ? eliMember.name : 'אלי';
     }
 
-    const itemsCount = (decodedText.match(/\d+\.\d{3}/g) || []).length;
+    // 6. Extract Individual Line Items & Quantities
+    const itemRegex = /\.\d{2}(\d+\.\d{3})\s*(ח\"י|ג\"ק)\s*(.+?)(?=\d{4,15}|\n|$)/g;
+    let itemMatch;
+    const parsedItems = [];
+    while ((itemMatch = itemRegex.exec(decodedText)) !== null) {
+      const qty = parseFloat(itemMatch[1]);
+      const unit = itemMatch[2];
+      let name = itemMatch[3].trim().replace(/^[\s,.-]+|[\s,.-]+$/g, '');
+      if (name && name !== 'משלוח אונליין' && !name.includes('פקדון')) {
+        parsedItems.push({ qty, unit, name });
+      }
+    }
+
+    const itemsCount = parsedItems.length || (decodedText.match(/\d+\.\d{3}/g) || []).length;
     const desc = `${store} (${itemsCount > 0 ? `${itemsCount} פריטים` : 'חשבונית מס קבלה'})`;
 
     return {
@@ -145,6 +160,7 @@ export function parseReceiptPdf(buffer, members = []) {
       payer: detectedPayer,
       itemsCount,
       description: desc,
+      parsedItems,
       rawText: decodedText
     };
   } catch (error) {
@@ -156,6 +172,7 @@ export function parseReceiptPdf(buffer, members = []) {
       payer: '',
       itemsCount: 0,
       description: '',
+      parsedItems: [],
       rawText: ''
     };
   }
@@ -181,6 +198,116 @@ export async function parseReceiptFile(file, members = []) {
     store: 'מחסני השוק',
     payer: '',
     itemsCount: 0,
-    description: 'קבלה שצולמה'
+    description: 'קבלה שצולמה',
+    parsedItems: []
   };
 }
+
+/**
+ * Maps parsed invoice line items to kitchen inventory products
+ * and updates their currentStock accurately.
+ */
+export function matchAndSyncStock(parsedItems = [], currentProducts = []) {
+  if (!parsedItems || parsedItems.length === 0) {
+    return { updatedProducts: currentProducts, syncReport: [] };
+  }
+
+  // Combine initial catalog with current products
+  const productMap = new Map();
+  INITIAL_PRODUCTS.forEach(p => productMap.set(p.id, { ...p }));
+  currentProducts.forEach(p => {
+    if (productMap.has(p.id)) {
+      productMap.set(p.id, { ...productMap.get(p.id), ...p });
+    } else {
+      productMap.set(p.id, { ...p });
+    }
+  });
+
+  const updatedProducts = Array.from(productMap.values());
+  const syncReport = [];
+
+  // Reset stock to 0 to apply clean new receipt values
+  updatedProducts.forEach(p => p.currentStock = 0);
+
+  parsedItems.forEach(item => {
+    const rawName = item.name.toLowerCase();
+    let matched = null;
+    let computedQty = item.qty;
+
+    // Meat & Poultry
+    if (rawName.includes('שניצל') || (rawName.includes('חזה') && !rawName.includes('תיבול') && !rawName.includes('גריל'))) {
+      matched = updatedProducts.find(p => p.name.includes('שניצל') || p.id === 'prod-1');
+      if (matched) computedQty = Math.round(item.qty / 0.95) || 6;
+    } else if (rawName.includes('פרגיות')) {
+      matched = updatedProducts.find(p => p.name.includes('פרגיות') || p.id === 'prod-2');
+      if (matched) computedQty = Math.round(item.qty / 0.95) || 5;
+    }
+    // Main Sides
+    else if (rawName.includes('בסמטי') || (rawName.includes('אורז') && !rawName.includes('קוקוס'))) {
+      matched = updatedProducts.find(p => p.name.includes('אורז') || p.id === 'prod-chips' || p.id === 'prod-3');
+    } else if (rawName.includes('קוסקוס')) {
+      matched = updatedProducts.find(p => p.name.includes('קוסקוס') || p.id === 'prod-couscous');
+    } else if (rawName.includes('ציפס') || rawName.includes('צ\'יפס')) {
+      matched = updatedProducts.find(p => p.name.includes('ציפס') || p.name.includes('צ\'יפס') || p.id === 'prod-chips');
+    } else if (rawName.includes('בורגול')) {
+      matched = updatedProducts.find(p => p.name.includes('בורגול') || p.id === 'prod-15');
+    }
+    // Dairy & Drinks
+    else if ((rawName.includes('חלב') && rawName.includes('מהדרין')) || rawName.includes('קרטון 3')) {
+      matched = updatedProducts.find(p => p.id === 'prod-milk' || p.name.includes('חלב'));
+    } else if (rawName.includes('קולה') && rawName.includes('zero')) {
+      matched = updatedProducts.find(p => p.id === 'prod-coca-cola-zero' || p.name.includes('קוקה קולה'));
+    } else if (rawName.includes('פפסי') && rawName.includes('זירו')) {
+      matched = updatedProducts.find(p => p.id === 'prod-pepsi-zero' || p.name.includes('פפסי'));
+    }
+    // Fresh Veggies
+    else if (rawName.includes('בטטה')) {
+      matched = updatedProducts.find(p => p.id === 'prod-sweet-potato' || p.name.includes('בטטה'));
+      computedQty = Math.round(item.qty) || 3;
+    } else if (rawName.includes('לבן אדמה') || rawName.includes('תפוח אדמה')) {
+      matched = updatedProducts.find(p => p.id === 'prod-potato-bag' || p.id === 'prod-9' || p.name.includes('תפוח'));
+      computedQty = 1; // 1 sack of 4kg
+    } else if (rawName.includes('שרי')) {
+      matched = updatedProducts.find(p => p.id === 'prod-cherry-tomatoes' || p.name.includes('שרי'));
+    } else if (rawName.includes('שמפיניון') || rawName.includes('פטריות')) {
+      matched = updatedProducts.find(p => p.id === 'prod-mushrooms' || p.name.includes('פטריות'));
+    } else if (rawName.includes('פטרוזיליה') || rawName.includes('כוסברה')) {
+      matched = updatedProducts.find(p => p.id === 'prod-greens' || p.name.includes('פטרוזיליה'));
+    } else if (rawName.includes('חריף פלפל')) {
+      matched = updatedProducts.find(p => p.id === 'prod-spicy-pepper' || p.name.includes('חריף'));
+    }
+    // Pantry & Spices
+    else if (rawName.includes('זית')) {
+      matched = updatedProducts.find(p => p.id === 'prod-6' || p.name.includes('זית'));
+    } else if (rawName.includes('פפריקה')) {
+      matched = updatedProducts.find(p => p.id === 'prod-spice-paprika' || p.name.includes('פפריקה'));
+    } else if (rawName.includes('עוף גריל') || (rawName.includes('גריל') && rawName.includes('עוף'))) {
+      matched = updatedProducts.find(p => p.id === 'prod-spice-chicken' || p.name.includes('גריל'));
+    } else if (rawName.includes('כתוש שום') || rawName.includes('טחון שום') || rawName.includes('שום')) {
+      matched = updatedProducts.find(p => p.id === 'prod-garlic-crushed' || p.name.includes('שום'));
+    }
+    // Disposables & Cleaning
+    else if (rawName.includes('צלחות')) {
+      matched = updatedProducts.find(p => p.id === 'prod-plates-thick' || p.name.includes('צלחות'));
+    } else if (rawName.includes('מזלגות')) {
+      matched = updatedProducts.find(p => p.id === 'prod-cutlery-forks' || p.name.includes('מזלגות'));
+    } else if (rawName.includes('כפות')) {
+      matched = updatedProducts.find(p => p.id === 'prod-cutlery-spoons' || p.name.includes('כפות'));
+    } else if (rawName.includes('אפיה נייר') || rawName.includes('אפייה')) {
+      matched = updatedProducts.find(p => p.id === 'prod-baking-paper' || p.name.includes('אפייה'));
+    }
+
+    if (matched) {
+      matched.currentStock = (matched.currentStock || 0) + computedQty;
+      syncReport.push({
+        name: matched.name,
+        qtyAdded: computedQty,
+        unit: matched.unit,
+        totalStock: matched.currentStock
+      });
+    }
+  });
+
+  return { updatedProducts, syncReport };
+}
+

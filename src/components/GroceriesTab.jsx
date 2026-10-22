@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { 
   ShoppingCart, ExternalLink, Copy, Check, Plus, Minus, 
   Package, DollarSign, Sparkles, Filter, AlertCircle,
-  Search, Zap, ChevronRight, ChevronLeft, X, RotateCcw, CheckSquare
+  Search, Zap, ChevronRight, ChevronLeft, X, RotateCcw, CheckSquare,
+  LayoutList, LayoutGrid, CheckCircle2
 } from 'lucide-react';
 import { generateWhatsAppShoppingList } from '../utils/helpers';
 
@@ -15,6 +16,8 @@ export default function GroceriesTab({
   todayAttendeesCount = 0,
 }) {
   const [activeCategory, setActiveCategory] = useState('all');
+  const [viewMode, setViewMode] = useState('cards'); // 'cards' | 'table'
+  const [stockStatusFilter, setStockStatusFilter] = useState('all'); // 'all' | 'missing' | 'inStock'
   const [copied, setCopied] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showOrderWizard, setShowOrderWizard] = useState(false);
@@ -37,16 +40,23 @@ export default function GroceriesTab({
     { id: 'cleaning', label: 'ניקיון וכלים', icon: '🧼' },
   ];
 
-  // Calculations
+  // Calculations: How much is in stock vs how much is needed
   const itemsToBuy = products.filter(p => (p.requiredStock - p.currentStock) > 0);
+  const itemsInStock = products.filter(p => p.currentStock >= p.requiredStock);
   const totalEstimatedCost = itemsToBuy.reduce((sum, p) => {
     const qty = Math.max(0, p.requiredStock - p.currentStock);
     return sum + (qty * p.pricePerUnit);
   }, 0);
 
-  const filteredProducts = activeCategory === 'all' 
+  const categoryFiltered = activeCategory === 'all' 
     ? products 
     : products.filter(p => p.category === activeCategory);
+
+  const filteredProducts = categoryFiltered.filter(p => {
+    if (stockStatusFilter === 'missing') return (p.requiredStock - p.currentStock) > 0;
+    if (stockStatusFilter === 'inStock') return p.currentStock >= p.requiredStock;
+    return true;
+  });
 
   const activeOrderList = itemsToBuy.length > 0 ? itemsToBuy : products;
   const currentWizardItem = activeOrderList[wizardIndex] || activeOrderList[0];
@@ -307,109 +317,288 @@ export default function GroceriesTab({
         ))}
       </div>
 
-      {/* PRODUCTS LIST */}
-      <div className="space-y-2.5">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-xs font-extrabold text-slate-700">
-            {filteredProducts.length} מוצרים {activeCategory !== 'all' ? 'בקטגוריה' : ''}
-          </span>
+      {/* 📊 INVENTORY CONTROLS & "כמה יש וכמה נשאר" VIEW SWITCHER */}
+      <div className="space-y-2 pt-1">
+        <div className="flex items-center justify-between gap-2 px-1">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setViewMode('cards')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1 border ${
+                viewMode === 'cards'
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>כרטיסים</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1 border ${
+                viewMode === 'table'
+                  ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <LayoutList className="w-3.5 h-3.5" />
+              <span>כמה יש וכמה נשאר 📊</span>
+            </button>
+          </div>
+
           <button
             onClick={() => setShowAddModal(true)}
             className="text-xs font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 bg-orange-50 px-2.5 py-1 rounded-xl border border-orange-200/60"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>הוסף מוצר קבוע</span>
+            <span>הוסף מוצר</span>
           </button>
         </div>
 
-        {filteredProducts.map(product => {
-          const qtyNeeded = Math.max(0, product.requiredStock - product.currentStock);
-          const isMissing = qtyNeeded > 0;
+        {/* Quick stock status filter pills */}
+        <div className="flex items-center gap-1.5 px-1 overflow-x-auto no-scrollbar text-[11px]">
+          <button
+            type="button"
+            onClick={() => setStockStatusFilter('all')}
+            className={`px-2.5 py-0.5 rounded-lg font-bold transition ${
+              stockStatusFilter === 'all'
+                ? 'bg-slate-800 text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            הכל ({categoryFiltered.length})
+          </button>
 
-          return (
-            <div
-              key={product.id}
-              className={`bg-white rounded-2xl p-3.5 border transition-all ${
-                isMissing 
-                  ? 'border-orange-200 shadow-xs' 
-                  : 'border-slate-200/80 bg-slate-50/40 opacity-90'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <h4 className="font-bold text-slate-800 text-xs sm:text-sm">{product.name}</h4>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500">
-                    <span>מחיר: ~{product.pricePerUnit} ₪ ל-{product.unit}</span>
-                    <span>•</span>
-                    <span>יעד: {product.requiredStock} {product.unit}</span>
-                  </div>
-                  {product.shukNote && (
-                    <p className="text-[10px] text-orange-800/80 bg-orange-50 px-2 py-0.5 rounded-md inline-block mt-1">
-                      {product.shukNote}
-                    </p>
-                  )}
-                </div>
+          <button
+            type="button"
+            onClick={() => setStockStatusFilter('inStock')}
+            className={`px-2.5 py-0.5 rounded-lg font-bold transition flex items-center gap-1 ${
+              stockStatusFilter === 'inStock'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
+            }`}
+          >
+            <span>🟢 יש במלאי</span>
+            <span>({categoryFiltered.filter(p => p.currentStock >= p.requiredStock).length})</span>
+          </button>
 
-                {/* Status Badge */}
-                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 ${
-                  isMissing 
-                    ? 'bg-rose-100 text-rose-800 border border-rose-200' 
-                    : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                }`}>
-                  {isMissing ? `להזמין: ${qtyNeeded} ${product.unit}` : 'קיים במלאי ✓'}
-                </span>
-              </div>
-
-              {/* Stock counter stepper */}
-              <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-600">
-                  כמה נשאר במקרר/מזווה?
-                </span>
-
-                <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
-                  <button
-                    onClick={() => onUpdateStock(product.id, Math.max(0, product.currentStock - (product.unit === 'ק"ג' ? 0.5 : 1)))}
-                    className="w-7 h-7 bg-white rounded-lg flex items-center justify-center text-slate-700 shadow-xs active:scale-90 hover:bg-slate-200 font-bold"
-                  >
-                    <Minus className="w-3.5 h-3.5" />
-                  </button>
-
-                  <span className="w-14 text-center font-black text-xs text-slate-800">
-                    {product.currentStock} {product.unit}
-                  </span>
-
-                  <button
-                    onClick={() => onUpdateStock(product.id, product.currentStock + (product.unit === 'ק"ג' ? 0.5 : 1))}
-                    className="w-7 h-7 bg-white rounded-lg flex items-center justify-center text-slate-700 shadow-xs active:scale-90 hover:bg-slate-200 font-bold"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Quick direct search link to Machsanei Hashuk if missing */}
-              {isMissing && (
-                <div className="mt-2.5 pt-2 border-t border-dashed border-orange-200 flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-orange-950 font-bold">
-                    חסר {qtyNeeded} {product.unit} להזמנה
-                  </span>
-                  <a
-                    href={`https://www.mck.co.il/search?q=${encodeURIComponent(product.name)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-300 rounded-xl text-[11px] font-extrabold transition active:scale-95 shadow-2xs"
-                  >
-                    <span>הוסף באתר השוק</span>
-                    <ExternalLink className="w-3 h-3 text-orange-700" />
-                  </a>
-                </div>
-              )}
-            </div>
-          );
-        })}
+          <button
+            type="button"
+            onClick={() => setStockStatusFilter('missing')}
+            className={`px-2.5 py-0.5 rounded-lg font-bold transition flex items-center gap-1 ${
+              stockStatusFilter === 'missing'
+                ? 'bg-rose-600 text-white'
+                : 'bg-rose-50 text-rose-800 hover:bg-rose-100 border border-rose-200'
+            }`}
+          >
+            <span>🔴 חסר להזמנה</span>
+            <span>({categoryFiltered.filter(p => p.currentStock < p.requiredStock).length})</span>
+          </button>
+        </div>
       </div>
+
+      {/* 📊 VIEW 1: TABLE MODE ("כמה יש וכמה נשאר") */}
+      {viewMode === 'table' ? (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-3.5 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">📊</span>
+              <div>
+                <h4 className="font-black text-xs">מאזן מלאי שבועי: כמה יש וכמה נשאר</h4>
+                <p className="text-[10px] text-slate-300">עדכון ישיר בלחיצה על + ו- כשאוכלים או מבשלים</p>
+              </div>
+            </div>
+            <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">
+              {filteredProducts.length} מוצרים
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-right text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] font-black">
+                  <th className="p-3">שם מוצר</th>
+                  <th className="p-3 text-center">כמה יש במלאי</th>
+                  <th className="p-3 text-center">יעד נדרש</th>
+                  <th className="p-3 text-center">נשאר / חסר</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
+                {filteredProducts.length === 0 ? (
+                  <tr>
+                    <td colSpan="4" className="text-center py-6 text-slate-400 text-xs italic">
+                      אין מוצרים התואמים לסינון שנבחר
+                    </td>
+                  </tr>
+                ) : (
+                  filteredProducts.map(product => {
+                    const diff = product.currentStock - product.requiredStock;
+                    const isEnough = diff >= 0;
+                    const unitDecimals = product.unit === 'ק"ג' ? 1 : 0;
+
+                    return (
+                      <tr key={product.id} className="hover:bg-slate-50/80 transition">
+                        <td className="p-3 font-bold text-slate-800">
+                          <div className="leading-tight">{product.name}</div>
+                          {product.shukNote && (
+                            <span className="text-[9px] text-slate-400 block font-normal mt-0.5">
+                              {product.shukNote}
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="p-3 text-center whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5 bg-slate-100 rounded-xl p-1 shadow-2xs">
+                            <button
+                              type="button"
+                              onClick={() => onUpdateStock(product.id, Math.max(0, product.currentStock - (product.unit === 'ק"ג' ? 0.5 : 1)))}
+                              className="w-6 h-6 bg-white rounded-lg flex items-center justify-center text-slate-700 shadow-xs font-bold text-xs hover:bg-slate-200 active:scale-95"
+                              title="הפחת 1"
+                            >
+                              -
+                            </button>
+                            <span className="font-black text-xs px-1 text-slate-900 min-w-12 text-center">
+                              {product.currentStock} {product.unit}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => onUpdateStock(product.id, product.currentStock + (product.unit === 'ק"ג' ? 0.5 : 1))}
+                              className="w-6 h-6 bg-white rounded-lg flex items-center justify-center text-slate-700 shadow-xs font-bold text-xs hover:bg-slate-200 active:scale-95"
+                              title="הוסף 1"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </td>
+
+                        <td className="p-3 text-center whitespace-nowrap font-bold text-slate-500">
+                          {product.requiredStock} {product.unit}
+                        </td>
+
+                        <td className="p-3 text-center whitespace-nowrap">
+                          {isEnough ? (
+                            <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-full text-[10px] font-black">
+                              <span>יש מספיק</span>
+                              {diff > 0 && <span>(+{diff.toFixed(unitDecimals)})</span>}
+                              <span>✓</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 bg-rose-100 text-rose-800 border border-rose-200 px-2.5 py-1 rounded-full text-[10px] font-black">
+                              <span>חסר</span>
+                              <span>{Math.abs(diff).toFixed(unitDecimals)} {product.unit}</span>
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        /* 🎴 VIEW 2: CARDS MODE */
+        <div className="space-y-2.5">
+          {filteredProducts.map(product => {
+            const qtyNeeded = Math.max(0, product.requiredStock - product.currentStock);
+            const isMissing = qtyNeeded > 0;
+            const diff = product.currentStock - product.requiredStock;
+
+            return (
+              <div
+                key={product.id}
+                className={`bg-white rounded-2xl p-3.5 border transition-all ${
+                  isMissing 
+                    ? 'border-orange-200 shadow-xs' 
+                    : 'border-slate-200/80 bg-slate-50/40 opacity-90'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-bold text-slate-800 text-xs sm:text-sm">{product.name}</h4>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500">
+                      <span>מחיר: ~{product.pricePerUnit} ₪ ל-{product.unit}</span>
+                      <span>•</span>
+                      <span>יעד קבוע: {product.requiredStock} {product.unit}</span>
+                    </div>
+                    {product.shukNote && (
+                      <p className="text-[10px] text-orange-800/80 bg-orange-50 px-2 py-0.5 rounded-md inline-block mt-1">
+                        {product.shukNote}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Status Badge */}
+                  <span className={`text-[10px] font-black px-2.5 py-1 rounded-full shrink-0 ${
+                    isMissing 
+                      ? 'bg-rose-100 text-rose-800 border border-rose-200' 
+                      : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                  }`}>
+                    {isMissing ? `חסר: ${qtyNeeded} ${product.unit}` : `יש מספיק במלאי ${diff > 0 ? `(+${diff})` : ''} ✓`}
+                  </span>
+                </div>
+
+                {/* Stock counter stepper */}
+                <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-slate-700 block">
+                      כמה יש עכשיו במקרר / מזווה:
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      {isMissing ? `צריך עוד ${qtyNeeded} להגעה ליעד` : `נשאר עודף של ${diff} מעל היעד`}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
+                    <button
+                      onClick={() => onUpdateStock(product.id, Math.max(0, product.currentStock - (product.unit === 'ק"ג' ? 0.5 : 1)))}
+                      className="w-7 h-7 bg-white rounded-lg flex items-center justify-center text-slate-700 shadow-xs active:scale-90 hover:bg-slate-200 font-bold"
+                      title="הפחת 1 מהמלאי"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+
+                    <span className="w-14 text-center font-black text-xs text-slate-800">
+                      {product.currentStock} {product.unit}
+                    </span>
+
+                    <button
+                      onClick={() => onUpdateStock(product.id, product.currentStock + (product.unit === 'ק"ג' ? 0.5 : 1))}
+                      className="w-7 h-7 bg-white rounded-lg flex items-center justify-center text-slate-700 shadow-xs active:scale-90 hover:bg-slate-200 font-bold"
+                      title="הוסף 1 למלאי"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Quick direct search link to Machsanei Hashuk if missing */}
+                {isMissing && (
+                  <div className="mt-2.5 pt-2 border-t border-dashed border-orange-200 flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-orange-950 font-bold">
+                      חסר {qtyNeeded} {product.unit} להזמנה
+                    </span>
+                    <a
+                      href={`https://www.mck.co.il/search?q=${encodeURIComponent(product.name)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-300 rounded-xl text-[11px] font-extrabold transition active:scale-95 shadow-2xs"
+                    >
+                      <span>הוסף באתר השוק</span>
+                      <ExternalLink className="w-3 h-3 text-orange-700" />
+                    </a>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* ➕ ADD NEW PRODUCT MODAL */}
       {showAddModal && (

@@ -215,7 +215,7 @@ export default function BudgetTab({
       receiptFile: receiptFile || null,
     };
 
-    onAddExpense(newExpense);
+    onAddExpense(newExpense, scanResult?.parsedItems || []);
     setJustAddedExpense(newExpense);
     setHistoryTab('expenses');
 
@@ -1026,7 +1026,7 @@ export default function BudgetTab({
 
               {/* Automatic Scan Banner */}
               {scanResult && scanResult.amount > 0 && (
-                <div className="p-2.5 bg-emerald-50 border-2 border-emerald-400 rounded-2xl space-y-1 text-xs">
+                <div className="p-3 bg-emerald-50 border-2 border-emerald-400 rounded-2xl space-y-1.5 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="font-black text-emerald-900 flex items-center gap-1">
                       <Sparkles className="w-4 h-4 text-emerald-600" />
@@ -1039,6 +1039,14 @@ export default function BudgetTab({
                   <p className="text-[11px] text-emerald-800">
                     סכום: <strong>{scanResult.amount} ₪</strong> {scanResult.payer ? `• משלם שזוהה: ${scanResult.payer}` : ''}
                   </p>
+                  {scanResult.parsedItems?.length > 0 && (
+                    <div className="pt-1.5 border-t border-emerald-200 text-[10px] text-emerald-900 font-bold flex items-center justify-between">
+                      <span>📦 זוהו {scanResult.parsedItems.length} מוצרים מהחשבונית</span>
+                      <span className="text-emerald-700 bg-white/90 px-2 py-0.5 rounded-md border border-emerald-300">
+                        יסונכרן אוטומטית למלאי המטבח ✓
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 

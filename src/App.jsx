@@ -31,6 +31,8 @@ import {
   setStored 
 } from './utils/helpers';
 
+import { matchAndSyncStock } from './utils/receiptParser';
+
 import { 
   subscribeToKitchenData, 
   syncKitchenDataToCloud 
@@ -346,10 +348,18 @@ export default function App() {
   };
 
   // Handlers: Budget
-  const handleAddExpense = (newExpense) => {
+  const handleAddExpense = (newExpense, parsedItems = null) => {
     const updatedExpenses = [newExpense, ...expenses];
     setExpenses(updatedExpenses);
-    broadcastToCloud({ expenses: updatedExpenses });
+
+    let updatedProducts = products;
+    if (parsedItems && parsedItems.length > 0) {
+      const syncResult = matchAndSyncStock(parsedItems, products);
+      updatedProducts = syncResult.updatedProducts;
+      setProducts(updatedProducts);
+    }
+
+    broadcastToCloud({ expenses: updatedExpenses, products: updatedProducts });
   };
 
   const handleDeleteExpense = (expenseId) => {
