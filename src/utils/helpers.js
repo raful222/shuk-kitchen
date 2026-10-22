@@ -125,6 +125,7 @@ export const generateWhatsAppShoppingList = (products = [], dailyMenu = {}, atte
     meat: '🍗 בשר ועופות (פלטות)',
     dry: '🌾 יבשים ותוספות (חבילות)',
     veg: '🥗 ירקות ופירות',
+    drinks: '🥤 שתייה וחלב',
     cleaning: '🧼 ניקיון וכלים',
   };
 

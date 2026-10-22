@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { 
   Sparkles, CheckCircle2, Circle, Phone, RefreshCw, 
   UtensilsCrossed, Scale, Flame, Users, AlertTriangle, 
-  ChevronDown, Check, MessageCircle, AlertCircle, Layers, UserPlus, Package
+  ChevronDown, Check, MessageCircle, AlertCircle, Layers, UserPlus, Package,
+  BookOpen, Clock, ChefHat, X
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { DAYS_OF_WEEK, SIDE_DISH_CONFIG } from '../data/initialData';
@@ -23,6 +24,9 @@ export default function TodayTab({
   onOpenSettings,
   onOpenSchedule,
 }) {
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
+  const [recipeTab, setRecipeTab] = useState(dailyMenu.side || 'rice');
+
   const currentDayObj = DAYS_OF_WEEK.find(d => d.key === currentDayKey) || DAYS_OF_WEEK[0];
   const daySchedule = schedule[currentDayKey] || { actualMembers: [], completed: false };
   const weekDates = getWorkWeekDates();
@@ -63,6 +67,12 @@ export default function TodayTab({
   const rawPackagesNeeded = attendeeCount > 0 ? (attendeeCount / servingsPerPackage) : 0;
   const roundedPackages = Math.ceil(rawPackagesNeeded * 2) / 2;
 
+  // Exact rice & grains cup calculations:
+  // User Rule: default for 7 people = 2.5 cups of rice. Ratio 1:2 for boiling water.
+  const riceCupsRaw = attendeeCount > 0 ? (attendeeCount * (2.5 / 7)) : 0;
+  const displayRiceCups = Math.max(0.5, Math.round(riceCupsRaw * 2) / 2);
+  const displayWaterCups = (displayRiceCups * 2).toFixed(1);
+
   // Check if any of today's cooks is absent (only relevant if duty is active)
   const absentCooks = isDutyActive ? assignedCooks.filter(cook => !getIsAttendingToday(cook.id)) : [];
 
@@ -81,6 +91,7 @@ export default function TodayTab({
 
   const handleSelectSide = (sideId) => {
     const config = SIDE_DISH_CONFIG[sideId] || SIDE_DISH_CONFIG.rice;
+    setRecipeTab(sideId);
     onUpdateDailyMenu({
       ...dailyMenu,
       side: sideId,
@@ -415,6 +426,96 @@ export default function TodayTab({
             </div>
           </div>
 
+          {/* 🍚 EXACT CUPS & MICROWAVE TIMES CALLOUT (ACCORDING TO USER'S EXACT RULES) */}
+          <div className="p-3 bg-amber-50/70 border border-amber-200/90 rounded-2xl space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-black text-xs text-amber-950 flex items-center gap-1.5">
+                <span>{currentSideConfig.icon}</span>
+                <span>
+                  {currentSideKey === 'rice' && 'כמויות מדויקות לאורז (בסיר / מיקרו):'}
+                  {currentSideKey === 'bulgur' && 'כמויות מדויקות לבורגול במיקרו:'}
+                  {currentSideKey === 'couscous' && 'הכנה מהירה לקוסקוס (ללא בישול!):'}
+                  {currentSideKey === 'chips' && 'הוראות אפייה לצ\'יפס סטייק:'}
+                </span>
+              </span>
+              <span className="text-[10px] bg-amber-200/80 text-amber-900 font-bold px-2 py-0.5 rounded-full">
+                ⏱️ {currentSideConfig.cookMethod}
+              </span>
+            </div>
+
+            {currentSideKey === 'rice' && (
+              <div className="text-xs text-amber-900 space-y-1">
+                <div className="flex items-center justify-between font-bold">
+                  <span>כמות אורז מומלצת להיום ({attendeeCount} סועדים):</span>
+                  <span className="text-orange-700 text-sm">{displayRiceCups} כוסות אורז</span>
+                </div>
+                <div className="flex items-center justify-between font-bold">
+                  <span>מים רותחים (יחס 1 ל-2):</span>
+                  <span className="text-blue-700 text-sm">{displayWaterCups} כוסות מים</span>
+                </div>
+                <p className="text-[11px] text-amber-800 pt-1">
+                  🧂 <strong>תיבול:</strong> קצת שמן, מלח, פלפל שחור (מרק עוף – לא חייב / אופציונלי).
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  * מחושב לפי ברירת המחדל המדויקת שלכם: 2.5 כוסות אורז ל-7 אנשים.
+                </p>
+              </div>
+            )}
+
+            {currentSideKey === 'bulgur' && (
+              <div className="text-xs text-amber-900 space-y-1">
+                <div className="flex items-center justify-between font-bold">
+                  <span>כמות בורגול להיום ({attendeeCount} סועדים):</span>
+                  <span className="text-amber-800 text-sm">{displayRiceCups} כוסות בורגול</span>
+                </div>
+                <div className="flex items-center justify-between font-bold">
+                  <span>מים רותחים (יחס 1 ל-2):</span>
+                  <span className="text-blue-700 text-sm">{displayWaterCups} כוסות מים</span>
+                </div>
+                <p className="text-[11px] text-amber-800 pt-1">
+                  🧂 <strong>תיבול:</strong> שמן ומלח בנדיבות • <strong>20 דקות במיקרוגל</strong> בכלי מתאים מכוסה חלקית.
+                </p>
+              </div>
+            )}
+
+            {currentSideKey === 'couscous' && (
+              <div className="text-xs text-amber-900 space-y-1">
+                <div className="flex items-center justify-between font-bold">
+                  <span>שקיות קוסקוס (350 גרם):</span>
+                  <span className="text-amber-800 text-sm">{roundedPackages} שקיות</span>
+                </div>
+                <div className="flex items-center justify-between font-bold">
+                  <span>מים רותחים:</span>
+                  <span className="text-blue-700 text-sm">{roundedPackages * 2} כוסות מים</span>
+                </div>
+                <p className="text-[11px] text-amber-800 pt-1">
+                  🥣 <strong>מתכון פשוט:</strong> מערבבים קוסקוס יבש עם 2-3 כפות שמן, מלח וכורכום, שופכים מים רותחים, מכסים 6 דקות ומאווררים במזלג!
+                </p>
+              </div>
+            )}
+
+            {currentSideKey === 'chips' && (
+              <div className="text-xs text-amber-900 space-y-1">
+                <div className="flex items-center justify-between font-bold">
+                  <span>שקיות צ'יפס (1.5 ק"ג עבה):</span>
+                  <span className="text-orange-700 text-sm">{roundedPackages} שקיות</span>
+                </div>
+                <p className="text-[11px] text-amber-800 pt-1">
+                  🍟 <strong>הכנה:</strong> 20-25 דקות בתנור / נינג'ה על 200 מעלות עם מעט שמן ומלח.
+                </p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => { setRecipeTab(currentSideKey); setShowRecipeModal(true); }}
+              className="w-full mt-1.5 py-1.5 px-2.5 bg-white hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl border border-amber-300 flex items-center justify-center gap-1.5 transition active:scale-95 shadow-2xs"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-amber-700" />
+              <span>פתח מתכון מלא והוראות הכנה צעד-אחר-צעד 📖</span>
+            </button>
+          </div>
+
           {/* Additional note / extra side */}
           <div>
             <input
@@ -511,6 +612,157 @@ export default function TodayTab({
             <span>לו"ז שבוע הבא</span>
             <span>➔</span>
           </button>
+        </div>
+      )}
+
+      {/* 📖 RECIPES & COOKING INSTRUCTIONS MODAL */}
+      {showRecipeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center font-bold">
+                  📖
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900">מתכונים והוראות הכנה</h3>
+                  <p className="text-[11px] text-slate-500">מיקרוגל, סיר וכמויות מחושבות להיום</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRecipeModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Recipe Tabs */}
+            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-2xl text-[11px] font-bold">
+              {Object.values(SIDE_DISH_CONFIG).map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => setRecipeTab(s.id)}
+                  className={`py-1.5 px-1 rounded-xl text-center transition ${
+                    recipeTab === s.id
+                      ? 'bg-white text-slate-900 shadow-xs font-black'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <div className="text-base">{s.icon}</div>
+                  <div className="text-[10px] mt-0.5">{s.label}</div>
+                </button>
+              ))}
+            </div>
+
+            {/* Active Recipe Content */}
+            {(() => {
+              const activeConfig = SIDE_DISH_CONFIG[recipeTab] || SIDE_DISH_CONFIG.rice;
+              return (
+                <div className="space-y-3 pt-1">
+                  <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-xs text-orange-900 flex items-center gap-1.5">
+                        <span>{activeConfig.icon}</span>
+                        <span>{activeConfig.label}</span>
+                      </span>
+                      <span className="text-[10px] bg-orange-200/80 text-orange-900 font-bold px-2 py-0.5 rounded-full">
+                        ⏱️ {activeConfig.cookMethod}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-orange-800">
+                      {activeConfig.desc}
+                    </p>
+                  </div>
+
+                  {/* Calculated ingredients for today */}
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5 text-xs">
+                    <h4 className="font-extrabold text-slate-800 flex items-center gap-1">
+                      <span>📏</span>
+                      <span>כמויות מדויקות להיום ({attendeeCount} סועדים):</span>
+                    </h4>
+                    {recipeTab === 'rice' && (
+                      <div className="space-y-1 text-slate-700 text-xs">
+                        <div className="flex items-center justify-between font-bold text-orange-700">
+                          <span>אורז:</span>
+                          <span>{displayRiceCups} כוסות (מפתח 2.5 כוסות ל-7 איש)</span>
+                        </div>
+                        <div className="flex items-center justify-between font-bold text-blue-700">
+                          <span>מים רותחים (יחס 1:2):</span>
+                          <span>{displayWaterCups} כוסות מים</span>
+                        </div>
+                      </div>
+                    )}
+                    {recipeTab === 'bulgur' && (
+                      <div className="space-y-1 text-slate-700 text-xs">
+                        <div className="flex items-center justify-between font-bold text-amber-800">
+                          <span>בורגול:</span>
+                          <span>{displayRiceCups} כוסות</span>
+                        </div>
+                        <div className="flex items-center justify-between font-bold text-blue-700">
+                          <span>מים רותחים (יחס 1:2):</span>
+                          <span>{displayWaterCups} כוסות מים</span>
+                        </div>
+                      </div>
+                    )}
+                    {recipeTab === 'couscous' && (
+                      <div className="space-y-1 text-slate-700 text-xs">
+                        <div className="flex items-center justify-between font-bold text-amber-800">
+                          <span>קוסקוס מהיר:</span>
+                          <span>{roundedPackages} שקיות (350 גרם כ"א)</span>
+                        </div>
+                        <div className="flex items-center justify-between font-bold text-blue-700">
+                          <span>מים רותחים:</span>
+                          <span>{roundedPackages * 2} כוסות מים רותחים</span>
+                        </div>
+                      </div>
+                    )}
+                    {recipeTab === 'chips' && (
+                      <div className="space-y-1 text-slate-700 text-xs">
+                        <div className="flex items-center justify-between font-bold text-orange-700">
+                          <span>צ'יפס סטייק עבה:</span>
+                          <span>{roundedPackages} שקיות (1.5 ק"ג כ"א)</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Seasoning */}
+                  <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-2xl text-xs space-y-1">
+                    <span className="font-extrabold text-amber-950 block">🧂 תיבול מומלץ:</span>
+                    <p className="text-amber-900 text-xs leading-relaxed">
+                      {activeConfig.seasoning}
+                    </p>
+                  </div>
+
+                  {/* Step by step instructions */}
+                  <div className="space-y-2">
+                    <span className="font-extrabold text-xs text-slate-800 block">📝 הוראות הכנה מהירות:</span>
+                    <div className="space-y-1.5 text-xs text-slate-600 leading-relaxed">
+                      {activeConfig.instructions.map((step, idx) => (
+                        <div key={idx} className="flex items-start gap-2 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                          <span className="w-4 h-4 rounded-full bg-slate-800 text-white text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">
+                            {idx + 1}
+                          </span>
+                          <span className="flex-1">{step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowRecipeModal(false)}
+                className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 active:scale-95 transition"
+              >
+                הבנתי, סגור מתכון 👨‍🍳
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

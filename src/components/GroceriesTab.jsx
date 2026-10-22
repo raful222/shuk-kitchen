@@ -26,8 +26,9 @@ export default function GroceriesTab({
   const categories = [
     { id: 'all', label: 'הכל', icon: '🛒' },
     { id: 'meat', label: 'בשר ועופות', icon: '🍗' },
+    { id: 'dry', label: 'יבשים ותוספות', icon: '🌾' },
     { id: 'veg', label: 'ירקות ופירות', icon: '🥗' },
-    { id: 'dry', label: 'יבשים ומזווה', icon: '🌾' },
+    { id: 'drinks', label: 'שתייה וחלב', icon: '🥤' },
     { id: 'cleaning', label: 'ניקיון וכלים', icon: '🧼' },
   ];
 

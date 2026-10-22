@@ -32,7 +32,9 @@ export default function BudgetTab({
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseDesc, setExpenseDesc] = useState('');
   const [expensePaidBy, setExpensePaidBy] = useState('');
+  const [customPayer, setCustomPayer] = useState('');
   const [receiptImage, setReceiptImage] = useState(null);
+  const [receiptFile, setReceiptFile] = useState(null); // { dataUrl, isPdf, name }
 
   // New deposit form
   const [depositMemberId, setDepositMemberId] = useState('');
@@ -84,20 +86,42 @@ export default function BudgetTab({
   const estimatedMealsCount = members.length > 0 ? (members.length * 3 * 3) : 0;
   const costPerMeal = estimatedMealsCount > 0 ? (totalExpenses / estimatedMealsCount).toFixed(1) : 0;
 
-  const handleImageChange = (e) => {
+  const handleCameraCapture = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (event) => {
+      setReceiptFile({ dataUrl: event.target.result, isPdf: false, name: file.name });
       setReceiptImage(event.target.result);
     };
     reader.readAsDataURL(file);
   };
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setReceiptFile({ dataUrl: event.target.result, isPdf, name: file.name });
+      setReceiptImage(event.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleLoadLatestShukReceipt = () => {
+    setExpenseAmount('1396.40');
+    setExpenseStore('מחסני השוק (אונליין)');
+    setExpensePaidBy('מור אלי');
+    setExpenseDesc('41 פריטים: 10.3 ק"ג עופות (פרגיות+שניצל), אורז בסמטי, קוסקוס, צ\'יפס, ירקות, שתייה וכלים');
+  };
+
   const handleCreateExpense = (e) => {
     e.preventDefault();
-    if (!expenseAmount || !expensePaidBy) return;
+    const finalPaidBy = (expensePaidBy === 'custom' ? customPayer.trim() : expensePaidBy) || 'קופת מזומן משותפת';
+    if (!expenseAmount || !finalPaidBy) return;
 
     onAddExpense({
       id: `exp-${Date.now()}`,
@@ -105,13 +129,16 @@ export default function BudgetTab({
       store: expenseStore,
       description: expenseDesc.trim() || 'קנייה במחסני השוק',
       amount: parseFloat(expenseAmount),
-      paidBy: expensePaidBy,
+      paidBy: finalPaidBy,
       receiptImage: receiptImage || null,
+      receiptFile: receiptFile || null,
     });
 
     setExpenseAmount('');
     setExpenseDesc('');
     setReceiptImage(null);
+    setReceiptFile(null);
+    setCustomPayer('');
     setShowAddExpenseModal(false);
   };
 
@@ -549,15 +576,19 @@ export default function BudgetTab({
                       {expense.receiptImage ? (
                         <button
                           onClick={() => setViewingReceiptImage(expense.receiptImage)}
-                          className="w-10 h-10 rounded-xl overflow-hidden border border-orange-300 shrink-0 relative group"
+                          className="w-10 h-10 rounded-xl overflow-hidden border border-orange-300 shrink-0 relative group flex items-center justify-center bg-orange-50"
                           title="לחץ לצפייה בקבלה"
                         >
-                          <img
-                            src={expense.receiptImage}
-                            alt="קבלה"
-                            className="w-full h-full object-cover group-hover:scale-105 transition"
-                          />
-                          <div className="absolute inset-0 bg-black/20 flex items-center justify-center text-white text-[10px]">
+                          {expense.receiptImage.startsWith('data:application/pdf') ? (
+                            <span className="text-xl">📄</span>
+                          ) : (
+                            <img
+                              src={expense.receiptImage}
+                              alt="קבלה"
+                              className="w-full h-full object-cover group-hover:scale-105 transition"
+                            />
+                          )}
+                          <div className="absolute inset-0 bg-black/20 flex items-center justify-center text-white text-[10px] opacity-0 group-hover:opacity-100 transition">
                             🔍
                           </div>
                         </button>
@@ -666,12 +697,12 @@ export default function BudgetTab({
 
       </div>
 
-      {/* 🖼️ VIEW RECEIPT IMAGE MODAL */}
+      {/* 🖼️ VIEW RECEIPT IMAGE / PDF MODAL */}
       {viewingReceiptImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl p-4 max-w-sm w-full space-y-3 relative shadow-2xl">
             <div className="flex items-center justify-between border-b pb-2">
-              <h4 className="font-bold text-sm text-slate-800">תמונת הקבלה ממחסני השוק</h4>
+              <h4 className="font-bold text-sm text-slate-800">מסמך קבלה / חשבונית</h4>
               <button
                 onClick={() => setViewingReceiptImage(null)}
                 className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200"
@@ -680,7 +711,23 @@ export default function BudgetTab({
               </button>
             </div>
             <div className="max-h-[70vh] overflow-auto rounded-2xl">
-              <img src={viewingReceiptImage} alt="קבלה מלאה" className="w-full rounded-xl" />
+              {viewingReceiptImage.startsWith('data:application/pdf') ? (
+                <div className="p-6 text-center space-y-3 bg-slate-50 rounded-2xl border">
+                  <span className="text-4xl block">📄</span>
+                  <p className="text-xs font-bold text-slate-800">קובץ חשבונית PDF</p>
+                  <a
+                    href={viewingReceiptImage}
+                    download="machsanei-hashuk-invoice.pdf"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-sm hover:bg-blue-700"
+                  >
+                    הורד / פתח קובץ PDF
+                  </a>
+                </div>
+              ) : (
+                <img src={viewingReceiptImage} alt="קבלה מלאה" className="w-full rounded-xl" />
+              )}
             </div>
           </div>
         </div>
@@ -689,15 +736,33 @@ export default function BudgetTab({
       {/* ➕ ADD EXPENSE MODAL */}
       {showAddExpenseModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl">
-            <h3 className="font-extrabold text-base text-slate-800">הזנת קבלה + צילום חשבונית</h3>
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-3.5 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-2.5">
+              <h3 className="font-extrabold text-base text-slate-800">הזנת קבלה + צילום/קובץ</h3>
+              <button
+                onClick={() => setShowAddExpenseModal(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* ⚡ Quick Load from Machsanei HaShuk invoice button */}
+            <button
+              type="button"
+              onClick={handleLoadLatestShukReceipt}
+              className="w-full py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-950 rounded-2xl text-[11px] font-black border border-amber-300 flex items-center justify-center gap-1.5 transition active:scale-95 shadow-2xs"
+            >
+              <span>⚡</span>
+              <span>טען את חשבונית מחסני השוק האחרונה (1,396.40 ₪)</span>
+            </button>
 
             <form onSubmit={handleCreateExpense} className="space-y-3">
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-1">סכום הקבלה (₪):</label>
                 <input
                   type="number"
-                  step="0.5"
+                  step="0.1"
                   value={expenseAmount}
                   onChange={(e) => setExpenseAmount(e.target.value)}
                   placeholder="350.00"
@@ -706,32 +771,65 @@ export default function BudgetTab({
                 />
               </div>
 
-              {/* Photo Upload / Camera */}
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">
-                  צלם / העלה תמונה של הקבלה:
+              {/* 📸 Dual Upload Options: Camera OR File/PDF/Gallery */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-600">
+                  צילום או העלאת קובץ קבלה (תמונה / PDF):
                 </label>
-                <label className="border-2 border-dashed border-orange-300 bg-orange-50/50 hover:bg-orange-100/50 rounded-2xl p-3 flex flex-col items-center justify-center gap-1 cursor-pointer transition">
-                  {receiptImage ? (
+
+                {receiptFile ? (
+                  <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <img src={receiptImage} alt="תצוגה מקדימה" className="w-12 h-12 rounded-lg object-cover border" />
-                      <span className="text-xs font-bold text-emerald-700">תמונה צורפה בהצלחה ✓</span>
+                      {receiptFile.isPdf ? (
+                        <span className="text-2xl">📄</span>
+                      ) : (
+                        <img src={receiptFile.dataUrl} alt="קבלה" className="w-10 h-10 rounded-lg object-cover border" />
+                      )}
+                      <div>
+                        <span className="text-xs font-bold text-emerald-800 block truncate max-w-[170px]">
+                          {receiptFile.name || (receiptFile.isPdf ? 'קובץ PDF' : 'תמונת קבלה')}
+                        </span>
+                        <span className="text-[10px] text-emerald-600">הקובץ נטען בהצלחה ✓</span>
+                      </div>
                     </div>
-                  ) : (
-                    <>
-                      <Camera className="w-6 h-6 text-orange-600" />
-                      <span className="text-xs font-bold text-orange-700">לחץ לצילום קבלה או בחירה מגלריה</span>
-                      <span className="text-[10px] text-slate-400">ישמר ישירות במערכת</span>
-                    </>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleImageChange}
-                    className="hidden"
-                  />
-                </label>
+                    <button
+                      type="button"
+                      onClick={() => { setReceiptFile(null); setReceiptImage(null); }}
+                      className="text-xs text-rose-600 font-bold hover:underline p-1"
+                    >
+                      הסר
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Camera Button (forces camera on mobile) */}
+                    <label className="border-2 border-dashed border-orange-300 bg-orange-50/60 hover:bg-orange-100/60 rounded-2xl p-2.5 flex flex-col items-center justify-center gap-1 cursor-pointer transition text-center active:scale-95">
+                      <Camera className="w-5 h-5 text-orange-600" />
+                      <span className="text-xs font-bold text-orange-800">צלם במצלמה</span>
+                      <span className="text-[9px] text-slate-400">צילום ישיר מהטלפון</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleCameraCapture}
+                        className="hidden"
+                      />
+                    </label>
+
+                    {/* File / Gallery / PDF Button (allows selecting existing files/PDFs) */}
+                    <label className="border-2 border-dashed border-blue-300 bg-blue-50/60 hover:bg-blue-100/60 rounded-2xl p-2.5 flex flex-col items-center justify-center gap-1 cursor-pointer transition text-center active:scale-95">
+                      <ImageIcon className="w-5 h-5 text-blue-600" />
+                      <span className="text-xs font-bold text-blue-800">בחר קובץ / PDF</span>
+                      <span className="text-[9px] text-slate-400">גלריה, מסמכים וקבצים</span>
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -754,12 +852,25 @@ export default function BudgetTab({
                   required
                 >
                   <option value="">בחר/י שם...</option>
+                  <option value="מור אלי">מור אלי (מהחשבונית)</option>
                   <option value="קופת מזומן משותפת">קופת מזומן משותפת</option>
                   <option value="קופת פייבוקס">קופת פייבוקס ישירה</option>
                   {members.map(m => (
                     <option key={m.id} value={m.name}>{m.name} (שילם מכספו הפרטי)</option>
                   ))}
+                  <option value="custom">אחר (הקלד שם)...</option>
                 </select>
+
+                {expensePaidBy === 'custom' && (
+                  <input
+                    type="text"
+                    value={customPayer}
+                    onChange={(e) => setCustomPayer(e.target.value)}
+                    placeholder="הקלד את שם המשלם..."
+                    className="w-full mt-1.5 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
+                    required
+                  />
+                )}
               </div>
 
               <div>
